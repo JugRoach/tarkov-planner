@@ -1,7 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
 
-const T = { bg:"#07090b",surface:"#0d1117",border:"#1a2a1a",borderBright:"#2a3a2a",gold:"#c8a84b",text:"#b8b0a0",textDim:"#4a5a4a",textBright:"#d8d0c0",mono:"'Courier New',Consolas,monospace" };
+const T = {
+  bg:"#07090b",surface:"#0d1117",border:"#1a2a1a",borderBright:"#2a3a2a",gold:"#c8a84b",text:"#b8b0a0",textDim:"#4a5a4a",textBright:"#d8d0c0",mono:"'Courier New',Consolas,monospace",
+  // Semantic colors
+  error:"#e05a5a",errorBg:"#1a0a0a",errorBorder:"#4a2a2a",
+  success:"#5dba5d",successBg:"#0a1a0a",successBorder:"#2a6a2a",
+  cyan:"#4ababa",cyanBg:"#0a1518",cyanBorder:"#1a3a3a",
+  orange:"#ba8a4a",orangeBg:"#1a1408",orangeBorder:"#5a4a1a",
+  blue:"#5a9aba",blueBg:"#0a1520",blueBorder:"#2a4a6a",
+  purple:"#9a8aba",purpleBg:"#0f0a18",purpleBorder:"#2a1a4a",
+  // Spacing scale
+  sp1:4, sp2:8, sp3:12, sp4:16, sp5:24,
+  // Font sizes (labels/small=14, body/buttons=14, titles=15, emphasis=18, heading=22)
+  fs1:16, fs2:16, fs3:17, fs4:20, fs5:24,
+  // Accent border
+  accent:3,
+  // Input base style
+  input:{ background:"#0a0d10", border:"1px solid #2a3a2a", color:"#d8d0c0", padding:"8px 10px", fontSize:11, fontFamily:"'Courier New',Consolas,monospace", outline:"none", boxSizing:"border-box" },
+};
 const PLAYER_COLORS = ["#c8a84b","#5a9aba","#9a5aba","#5aba8a","#ba7a5a"];
 const MAX_SQUAD = 5;
 const API_URL = "https://api.tarkov.dev/graphql";
@@ -16,7 +33,7 @@ function useStorage(key,def){const[val,setVal]=useState(def);const[ready,setRead
 
 // ─── API ─────────────────────────────────────────────────────────────────
 const MAPS_Q=`{maps{id name normalizedName lootContainers{lootContainer{name}}}}`;
-const TASKS_Q=`{tasks(lang:en){id name minPlayerLevel trader{name} map{id name normalizedName} objectives{id type description optional ...on TaskObjectiveMark{markerItem{name} zones{id map{id} position{x y z}}} ...on TaskObjectiveQuestItem{questItem{name} count possibleLocations{map{id} positions{x y z}} zones{id map{id} position{x y z}}} ...on TaskObjectiveShoot{targetNames count zoneNames zones{id map{id} position{x y z}}} ...on TaskObjectiveItem{items{name} count foundInRaid} ...on TaskObjectiveExtract{exitName}}}}`;
+const TASKS_Q=`{tasks(lang:en){id name minPlayerLevel trader{name} map{id name normalizedName} objectives{id type description optional ...on TaskObjectiveBasic{zones{id map{id} position{x y z}}} ...on TaskObjectiveMark{markerItem{name} zones{id map{id} position{x y z}}} ...on TaskObjectiveQuestItem{questItem{name} count possibleLocations{map{id} positions{x y z}} zones{id map{id} position{x y z}}} ...on TaskObjectiveShoot{targetNames count zoneNames zones{id map{id} position{x y z}}} ...on TaskObjectiveItem{items{name} count foundInRaid zones{id map{id} position{x y z}}} ...on TaskObjectiveExtract{exitName}}}}`;
 const HIDEOUT_Q=`{hideoutStations{id name normalizedName levels{level itemRequirements{item{id name shortName} count} stationLevelRequirements{station{id name} level} traderRequirements{trader{name} level}}}}`;
 async function fetchAPI(q){const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});return(await r.json()).data;}
 
@@ -138,30 +155,46 @@ const EMAPS = [
    desc:"Best starting map. Dense early quests.",bosses:["Reshala + 4 guards (Dorms)"],
    wiki:"https://escapefromtarkov.fandom.com/wiki/Customs",mapgenie:"https://mapgenie.io/tarkov/maps/customs",tarkovdev:"https://tarkov.dev/map/customs",
    lootPoints:[
-    {name:"Marked Room (Dorms 314)",type:"high-value",pct:{x:0.58,y:0.18},note:"Rare loot room — requires Marked Key",tags:["Weapon","Info","Key","Jewelry","Electronics"]},
-    {name:"3-Story Dorms",type:"mixed",pct:{x:0.56,y:0.2},note:"Multiple locked rooms, weapon crates, jackets",tags:["Weapon","Weapon mod","Key","Jewelry","Meds","Info"]},
-    {name:"2-Story Dorms",type:"mixed",pct:{x:0.52,y:0.22},note:"Safes, weapon boxes, quest items",tags:["Jewelry","Money","Weapon","Info"]},
-    {name:"Crack House",type:"mixed",pct:{x:0.42,y:0.35},note:"Medical supplies, weapon parts, tech spawns",tags:["Meds","Medical supplies","Weapon mod","Electronics"]},
-    {name:"USEC Stash (Big Red)",type:"tech",pct:{x:0.15,y:0.55},note:"Intel spawns, electronics, valuables",tags:["Electronics","Info","Jewelry"]},
-    {name:"New Gas Station",type:"mixed",pct:{x:0.48,y:0.48},note:"Medical crate, food, barter items",tags:["Meds","Food","Barter item","Medical supplies"]},
-    {name:"Old Gas Station",type:"stash",pct:{x:0.68,y:0.28},note:"Duffle bags, hidden stashes nearby",tags:["Barter item","Building material","Tool","Food"]},
-    {name:"Warehouse 4 (Factory Shacks)",type:"mixed",pct:{x:0.3,y:0.45},note:"Weapon crates, loose loot, jackets",tags:["Weapon","Weapon mod","Ammo","Barter item"]},
+    {name:"Marked Room (Dorms 314)",type:"high-value",pct:{x:0.47,y:0.93},note:"Rare loot room — requires Marked Key",tags:["Weapon","Info","Key","Jewelry","Electronics"]},
+    {name:"3-Story Dorms",type:"mixed",pct:{x:0.48,y:0.94},note:"Multiple locked rooms, weapon crates, jackets",tags:["Weapon","Weapon mod","Key","Jewelry","Meds","Info"]},
+    {name:"2-Story Dorms",type:"mixed",pct:{x:0.50,y:0.92},note:"Safes, weapon boxes, quest items",tags:["Jewelry","Money","Weapon","Info"]},
+    {name:"Crack House",type:"mixed",pct:{x:0.52,y:0.62},note:"Medical supplies, weapon parts, tech spawns",tags:["Meds","Medical supplies","Weapon mod","Electronics"]},
+    {name:"USEC Stash (Big Red)",type:"tech",pct:{x:0.92,y:0.20},note:"Intel spawns, electronics, valuables",tags:["Electronics","Info","Jewelry"]},
+    {name:"New Gas Station",type:"mixed",pct:{x:0.56,y:0.50},note:"Medical crate, food, barter items",tags:["Meds","Food","Barter item","Medical supplies"]},
+    {name:"Old Gas Station",type:"stash",pct:{x:0.36,y:0.24},note:"Duffle bags, hidden stashes nearby",tags:["Barter item","Building material","Tool","Food"]},
+    {name:"Warehouse 4 (Factory Shacks)",type:"mixed",pct:{x:0.40,y:0.55},note:"Weapon crates, loose loot, jackets",tags:["Weapon","Weapon mod","Ammo","Barter item"]},
    ],
    pmcExtracts:[
-    {name:"Crossroads",         type:"open",   note:"Always available — southeast corner near the main road T-junction", pct:{x:0.82,y:0.86}, requireItems:[]},
-    {name:"RUAF Roadblock",     type:"open",   note:"Always available — far northeast past the three-story dorms", pct:{x:0.9,y:0.08}, requireItems:[]},
-    {name:"Trailer Park",       type:"open",   note:"Always available — far west side, past the gas station", pct:{x:0.05,y:0.52}, requireItems:[]},
-    {name:"Smuggler's Boat",    type:"open",   note:"Always available — south riverbank, accessible from construction", pct:{x:0.67,y:0.95}, requireItems:[]},
-    {name:"ZB-1011",            type:"key",    note:"Requires ZB-1011 key to unlock the bunker door", pct:{x:0.26,y:0.33}, requireItems:["ZB-1011 key"]},
-    {name:"ZB-1012",            type:"key",    note:"Requires ZB-1012 key to unlock the bunker door — near old gas station", pct:{x:0.7,y:0.22}, requireItems:["ZB-1012 key"]},
-    {name:"Old Gas Station",    type:"coop",   note:"NOT usable in PvE — requires friendly Scav", pct:null, requireItems:[]},
+    {name:"Crossroads",                type:"open",   note:"Always available — south side", pct:{x:0.97,y:0.40}, requireItems:[]},
+    {name:"RUAF Roadblock",            type:"open",   note:"Always available — central", pct:{x:0.66,y:0.31}, requireItems:[]},
+    {name:"Trailer Park",              type:"open",   note:"Always available — far west", pct:{x:0.95,y:0.14}, requireItems:[]},
+    {name:"Smugglers' Boat",           type:"open",   note:"Always available — south riverbank", pct:{x:0.69,y:0.79}, requireItems:[]},
+    {name:"Old Gas Station",           type:"open",   note:"Always available", pct:{x:0.36,y:0.24}, requireItems:[]},
+    {name:"Dorms V-Ex",                type:"pay",    note:"Pay roubles — 3-story dorms parking", pct:{x:0.48,y:0.96}, requireItems:["Roubles"]},
+    {name:"ZB-1011",                   type:"key",    note:"Requires ZB-1011 key", pct:{x:0.07,y:0.33}, requireItems:["ZB-1011 key"]},
+    {name:"Smugglers' Bunker (ZB-1012)", type:"key",  note:"Requires key", pct:{x:0.22,y:0.36}, requireItems:["ZB-1012 key"]},
+    {name:"ZB-013",                    type:"key",    note:"Requires ZB-013 key", pct:{x:0.46,y:0.28}, requireItems:["ZB-013 key"]},
+    {name:"Railroad Passage (Flare)",  type:"special",note:"Requires flare", pct:{x:0.52,y:0.02}, requireItems:["Flare"]},
+    {name:"Boiler Room Basement (Co-op)", type:"coop", note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Crossroads",         type:"open",   note:"Always available", pct:{x:0.82,y:0.86}, requireItems:[]},
-    {name:"Trailer Park",       type:"open",   note:"Always available", pct:{x:0.05,y:0.52}, requireItems:[]},
-    {name:"Railroad to Tarkov", type:"open",   note:"Always available — north rail line", pct:{x:0.55,y:0.06}, requireItems:[]},
-    {name:"RUAF Roadblock",     type:"open",   note:"Always available", pct:{x:0.9,y:0.08}, requireItems:[]},
-    {name:"Old Gas Station",    type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Crossroads",                type:"open",   note:"Always available", pct:{x:0.97,y:0.40}, requireItems:[]},
+    {name:"Military Base CP",          type:"open",   note:"Always available", pct:{x:0.05,y:0.80}, requireItems:[]},
+    {name:"Passage Between Rocks",     type:"open",   note:"Always available", pct:{x:0.15,y:0.93}, requireItems:[]},
+    {name:"Railroad to Military Base", type:"open",   note:"Always available", pct:{x:0.20,y:0.97}, requireItems:[]},
+    {name:"Old Road Gate",             type:"open",   note:"Always available", pct:{x:0.48,y:0.96}, requireItems:[]},
+    {name:"Sniper Roadblock",          type:"open",   note:"Always available", pct:{x:0.64,y:0.80}, requireItems:[]},
+    {name:"Railroad to Port",          type:"open",   note:"Always available", pct:{x:0.79,y:0.65}, requireItems:[]},
+    {name:"Trailer Park Workers' Shack", type:"open", note:"Always available", pct:{x:0.88,y:0.14}, requireItems:[]},
+    {name:"Railroad to Tarkov",        type:"open",   note:"Always available", pct:{x:0.81,y:0.16}, requireItems:[]},
+    {name:"RUAF Roadblock",            type:"open",   note:"Always available", pct:{x:0.66,y:0.31}, requireItems:[]},
+    {name:"Warehouse 17",              type:"open",   note:"Always available", pct:{x:0.60,y:0.44}, requireItems:[]},
+    {name:"Factory Shacks",            type:"open",   note:"Always available", pct:{x:0.46,y:0.57}, requireItems:[]},
+    {name:"Warehouse 4",               type:"open",   note:"Always available", pct:{x:0.33,y:0.52}, requireItems:[]},
+    {name:"Old Gas Station Gate",      type:"open",   note:"Always available", pct:{x:0.37,y:0.20}, requireItems:[]},
+    {name:"Factory Far Corner",        type:"open",   note:"Always available", pct:{x:0.04,y:0.27}, requireItems:[]},
+    {name:"Administration Gate",       type:"open",   note:"Always available", pct:{x:0.03,y:0.46}, requireItems:[]},
+    {name:"Scav Checkpoint",           type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
   },
   {id:"factory",name:"Factory",tier:"Beginner",diff:1,color:"#a85c3a",
@@ -174,15 +207,17 @@ const EMAPS = [
     {name:"Locker Room",type:"stash",pct:{x:0.7,y:0.55},note:"Jackets, duffle bags",tags:["Key","Barter item","Money"]},
    ],
    pmcExtracts:[
-    {name:"Gate 0",             type:"open",   note:"Always available — main entrance south side", pct:{x:0.15,y:0.9}, requireItems:[]},
-    {name:"Gate 3",             type:"open",   note:"Always available — east side exit near machinery", pct:{x:0.85,y:0.9}, requireItems:[]},
-    {name:"Hole in the Fence",  type:"open",   note:"Always available — north fence near forklift area", pct:{x:0.12,y:0.1}, requireItems:[]},
-    {name:"Third Floor Stairs", type:"key",    note:"Requires Factory Exit Key — climb to third floor office stairwell", pct:{x:0.62,y:0.28}, requireItems:["Factory Exit Key"]},
+    {name:"Gate 0",             type:"open",   note:"Always available", pct:{x:0.09,y:0.98}, requireItems:[]},
+    {name:"Gate 3",             type:"open",   note:"Always available", pct:{x:0.03,y:0.13}, requireItems:[]},
+    {name:"Cellars",            type:"open",   note:"Always available — basement exit", pct:{x:0.73,y:0.02}, requireItems:[]},
+    {name:"Courtyard Gate",     type:"open",   note:"Always available", pct:{x:0.02,y:0.37}, requireItems:[]},
+    {name:"Med Tent Gate",      type:"open",   note:"Always available", pct:{x:0.98,y:0.66}, requireItems:[]},
+    {name:"Smugglers' Passage", type:"key",    note:"Requires key", pct:{x:0.73,y:0.20}, requireItems:["Factory key"]},
    ],
    scavExtracts:[
-    {name:"Gate 0",             type:"open",   note:"Always available", pct:{x:0.15,y:0.9}, requireItems:[]},
-    {name:"Gate 3",             type:"open",   note:"Always available", pct:{x:0.85,y:0.9}, requireItems:[]},
-    {name:"Hole in the Fence",  type:"open",   note:"Always available", pct:{x:0.12,y:0.1}, requireItems:[]},
+    {name:"Gate 3",             type:"open",   note:"Always available", pct:{x:0.05,y:0.13}, requireItems:[]},
+    {name:"Camera Bunker Door", type:"open",   note:"Always available", pct:{x:0.21,y:0.65}, requireItems:[]},
+    {name:"Office Window",      type:"open",   note:"Always available — 3rd floor", pct:{x:0.21,y:0.42}, requireItems:[]},
    ],
   },
   {id:"woods",name:"Woods",tier:"Beginner",diff:2,color:"#4a7c3f",
@@ -197,19 +232,28 @@ const EMAPS = [
     {name:"Mountain Stash",type:"stash",pct:{x:0.78,y:0.15},note:"Hidden stashes along the ridge",tags:["Barter item","Building material","Tool","Meds"]},
    ],
    pmcExtracts:[
-    {name:"UN Roadblock",       type:"open",   note:"Always available — far northwest corner", pct:{x:0.1,y:0.06}, requireItems:[]},
-    {name:"RUAF Roadblock",     type:"open",   note:"Always available — far northeast corner", pct:{x:0.88,y:0.06}, requireItems:[]},
-    {name:"Outskirts",          type:"open",   note:"Always available — far west side", pct:{x:0.06,y:0.88}, requireItems:[]},
-    {name:"Old Station",        type:"open",   note:"Always available — south-center, near the main road", pct:{x:0.35,y:0.92}, requireItems:[]},
-    {name:"ZB-016",             type:"key",    note:"Requires ZB-016 key — military bunker in the forest", pct:{x:0.6,y:0.44}, requireItems:["ZB-016 key"]},
-    {name:"Bridge V-Ex",        type:"pay",    note:"Pay 3,000 roubles to the driver — south bridge exit. Have exact change.", pct:{x:0.52,y:0.96}, requireItems:["3,000 roubles"]},
-    {name:"Scav House",         type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"UN Roadblock",              type:"open",   note:"Always available", pct:{x:0.84,y:0.89}, requireItems:[]},
+    {name:"Northern UN Roadblock",     type:"open",   note:"Always available", pct:{x:0.86,y:0.62}, requireItems:[]},
+    {name:"Outskirts",                 type:"open",   note:"Always available — far west", pct:{x:0.21,y:0.94}, requireItems:[]},
+    {name:"RUAF Gate",                 type:"open",   note:"Always available", pct:{x:0.56,y:0.98}, requireItems:[]},
+    {name:"Railway Bridge to Tarkov",  type:"open",   note:"Always available", pct:{x:0.98,y:0.77}, requireItems:[]},
+    {name:"ZB-014",                    type:"key",    note:"Requires key", pct:{x:0.14,y:0.72}, requireItems:["ZB-014 key"]},
+    {name:"ZB-016",                    type:"key",    note:"Requires key", pct:{x:0.74,y:0.68}, requireItems:["ZB-016 key"]},
+    {name:"Bridge V-Ex",               type:"pay",    note:"Pay roubles", pct:{x:0.80,y:0.30}, requireItems:["Roubles"]},
+    {name:"Power Line Passage (Flare)",type:"special",note:"Requires flare", pct:{x:0.05,y:0.61}, requireItems:["Flare"]},
+    {name:"Friendship Bridge (Co-Op)", type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"UN Roadblock",       type:"open",   note:"Always available", pct:{x:0.1,y:0.06}, requireItems:[]},
-    {name:"Old Station",        type:"open",   note:"Always available", pct:{x:0.35,y:0.92}, requireItems:[]},
-    {name:"Outskirts",          type:"open",   note:"Always available", pct:{x:0.06,y:0.88}, requireItems:[]},
-    {name:"Scav House",         type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Outskirts",          type:"open",   note:"Always available", pct:{x:0.21,y:0.94}, requireItems:[]},
+    {name:"Dead Man's Place",   type:"open",   note:"Always available", pct:{x:0.32,y:0.87}, requireItems:[]},
+    {name:"Boat",               type:"open",   note:"Always available", pct:{x:0.33,y:0.83}, requireItems:[]},
+    {name:"Scav House",         type:"open",   note:"Always available", pct:{x:0.17,y:0.85}, requireItems:[]},
+    {name:"Scav Bunker",        type:"open",   note:"Always available", pct:{x:0.30,y:0.15}, requireItems:[]},
+    {name:"Mountain Stash",     type:"open",   note:"Always available", pct:{x:0.61,y:0.52}, requireItems:[]},
+    {name:"Eastern Rocks",      type:"open",   note:"Always available", pct:{x:0.82,y:0.65}, requireItems:[]},
+    {name:"Old Railway Depot",  type:"open",   note:"Always available", pct:{x:0.83,y:0.78}, requireItems:[]},
+    {name:"UN Roadblock",       type:"open",   note:"Always available", pct:{x:0.84,y:0.89}, requireItems:[]},
+    {name:"RUAF Roadblock",     type:"open",   note:"Always available", pct:{x:0.56,y:0.98}, requireItems:[]},
    ],
   },
   {id:"interchange",name:"Interchange",tier:"Intermediate",diff:2,color:"#3a6b8a",
@@ -226,16 +270,17 @@ const EMAPS = [
     {name:"Mantis / German",type:"mixed",pct:{x:0.45,y:0.45},note:"Weapon parts, barter items in mall center",tags:["Weapon mod","Barter item","Armor"]},
    ],
    pmcExtracts:[
-    {name:"Power Station",      type:"open",   note:"Always available — outside northwest, near the power station building", pct:{x:0.06,y:0.12}, requireItems:[]},
-    {name:"Emercom Checkpoint", type:"open",   note:"Always available — southeast corner road exit", pct:{x:0.88,y:0.88}, requireItems:[]},
-    {name:"Hole in Fence (IDEA)",type:"open",  note:"Always available — west side of IDEA store exterior", pct:{x:0.08,y:0.58}, requireItems:[]},
-    {name:"Railway Exfil",      type:"pay",    note:"Pay 3,000 roubles — vehicle extract on the railway east side", pct:{x:0.92,y:0.35}, requireItems:["3,000 roubles"]},
+    {name:"Emercom Checkpoint",  type:"open",   note:"Always available", pct:{x:0.89,y:0.82}, requireItems:[]},
+    {name:"Railway Exfil",       type:"open",   note:"Always available", pct:{x:0.12,y:0.02}, requireItems:[]},
+    {name:"Hole in the Fence",   type:"open",   note:"Always available — IDEA side", pct:{x:0.79,y:0.47}, requireItems:[]},
+    {name:"Power Station V-Ex",  type:"pay",    note:"Pay roubles", pct:{x:0.82,y:0.09}, requireItems:["Roubles"]},
+    {name:"Saferoom Exfil",      type:"key",    note:"Requires key + power on", pct:{x:0.63,y:0.56}, requireItems:["Saferoom key"]},
+    {name:"Scav Camp (Co-Op)",   type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Power Station",      type:"open",   note:"Always available", pct:{x:0.06,y:0.12}, requireItems:[]},
-    {name:"Emercom Checkpoint", type:"open",   note:"Always available", pct:{x:0.88,y:0.88}, requireItems:[]},
-    {name:"Hole in Fence (IDEA)",type:"open",  note:"Always available", pct:{x:0.08,y:0.58}, requireItems:[]},
-    {name:"Scav Camp",          type:"open",   note:"Always available — southeast area near UN checkpoint", pct:{x:0.78,y:0.78}, requireItems:[]},
+    {name:"Emercom Checkpoint",  type:"open",   note:"Always available", pct:{x:0.89,y:0.82}, requireItems:[]},
+    {name:"Railway Exfil",       type:"open",   note:"Always available", pct:{x:0.12,y:0.02}, requireItems:[]},
+    {name:"Scav Camp (Co-Op)",   type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
   },
   {id:"shoreline",name:"Shoreline",tier:"Intermediate",diff:3,color:"#5a8a7a",
@@ -251,17 +296,22 @@ const EMAPS = [
     {name:"Swamp Village",type:"stash",pct:{x:0.2,y:0.7},note:"Hidden stashes, tool boxes, building loot",tags:["Building material","Tool","Barter item"]},
    ],
    pmcExtracts:[
-    {name:"Rock Passage",       type:"open",   note:"Always available — northwest rocky coastline", pct:{x:0.08,y:0.18}, requireItems:[]},
-    {name:"CCP Temporary",      type:"open",   note:"Always available — southeast military checkpoint", pct:{x:0.88,y:0.82}, requireItems:[]},
-    {name:"Pier Boat",          type:"open",   note:"Always available — south pier on the waterfront", pct:{x:0.52,y:0.96}, requireItems:[]},
-    {name:"South Fence Gate",   type:"pay",    note:"Pay 3,000 roubles — south road vehicle extract", pct:{x:0.72,y:0.92}, requireItems:["3,000 roubles"]},
-    {name:"Path to Lighthouse", type:"special",note:"Requires Paracord + Red Rebel Ice Pick + NO armored rig equipped. All three conditions must be met.", pct:{x:0.06,y:0.06}, requireItems:["Paracord","Red Rebel Ice Pick","Non-armored rig (not an armored vest)"]},
+    {name:"Road to Customs",       type:"open",   note:"Always available", pct:{x:0.87,y:0.40}, requireItems:[]},
+    {name:"Pier Boat",             type:"open",   note:"Always available", pct:{x:0.54,y:0.95}, requireItems:[]},
+    {name:"Climber's Trail",       type:"special",note:"Requires Paracord + Red Rebel + no armored rig", pct:{x:0.46,y:0.05}, requireItems:["Paracord","Red Rebel Ice Pick"]},
+    {name:"Path to Lighthouse",    type:"open",   note:"Always available", pct:{x:0.04,y:0.16}, requireItems:[]},
+    {name:"Mountain Bunker",       type:"key",    note:"Requires key", pct:{x:0.57,y:0.03}, requireItems:["Bunker key"]},
+    {name:"Railway Bridge",        type:"open",   note:"Always available", pct:{x:0.98,y:0.70}, requireItems:[]},
+    {name:"Tunnel",                type:"open",   note:"Always available — west side", pct:{x:0.08,y:0.71}, requireItems:[]},
+    {name:"Road to North V-Ex",    type:"pay",    note:"Pay roubles", pct:{x:0.67,y:0.03}, requireItems:["Roubles"]},
+    {name:"Smugglers' Path (Co-op)", type:"coop", note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Rock Passage",       type:"open",   note:"Always available", pct:{x:0.08,y:0.18}, requireItems:[]},
-    {name:"CCP Temporary",      type:"open",   note:"Always available", pct:{x:0.88,y:0.82}, requireItems:[]},
-    {name:"Pier Boat",          type:"open",   note:"Always available", pct:{x:0.52,y:0.96}, requireItems:[]},
-    {name:"South Fence Gate",   type:"open",   note:"Always available for Scavs", pct:{x:0.72,y:0.92}, requireItems:[]},
+    {name:"Road to Customs",       type:"open",   note:"Always available", pct:{x:0.87,y:0.40}, requireItems:[]},
+    {name:"Lighthouse",            type:"open",   note:"Always available", pct:{x:0.62,y:0.95}, requireItems:[]},
+    {name:"Ruined Road",           type:"open",   note:"Always available", pct:{x:0.09,y:0.72}, requireItems:[]},
+    {name:"East Wing Gym Entrance",type:"open",   note:"Always available — Resort east wing", pct:{x:0.51,y:0.30}, requireItems:[]},
+    {name:"Admin Basement",        type:"open",   note:"Always available — Resort basement", pct:{x:0.49,y:0.26}, requireItems:[]},
    ],
   },
   {id:"reserve",name:"Reserve",tier:"Advanced",diff:4,color:"#7a5a8a",
@@ -277,15 +327,19 @@ const EMAPS = [
     {name:"Drop-Down Room",type:"tech",pct:{x:0.35,y:0.3},note:"Tech spawns, loose electronics",tags:["Electronics","Info"]},
    ],
    pmcExtracts:[
-    {name:"Armored Train",      type:"timed",  note:"The train spawns at a random time during the raid and stays for ~7 minutes before leaving. Listen for the horn — extract is at the train station south side. You cannot predict when it arrives.", pct:{x:0.72,y:0.88}, requireItems:[]},
-    {name:"D-2 Hermetic Door",  type:"special",note:"Requires pulling two levers in the underground tunnels in the correct sequence to open the bunker door. You must be underground to use it.", pct:{x:0.38,y:0.52}, requireItems:["Knowledge of the lever sequence (pull both levers in the underground)"]},
-    {name:"Cliff Descent",      type:"special",note:"Requires Paracord + Red Rebel Ice Pick + NO armored rig. All three conditions required simultaneously.", pct:{x:0.08,y:0.08}, requireItems:["Paracord","Red Rebel Ice Pick","Non-armored rig"]},
-    {name:"Scav Lands",         type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Cliff Descent",         type:"special",note:"Requires Paracord + Red Rebel + no armored rig", pct:{x:0.50,y:0.93}, requireItems:["Paracord","Red Rebel Ice Pick"]},
+    {name:"D-2",                   type:"special",note:"Requires pulling levers in underground", pct:{x:0.69,y:0.87}, requireItems:[]},
+    {name:"Exit to Woods",         type:"open",   note:"Always available", pct:{x:0.43,y:0.13}, requireItems:[]},
+    {name:"Armored Train",         type:"timed",  note:"Spawns randomly — listen for the horn", pct:{x:0.24,y:0.27}, requireItems:[]},
+    {name:"Bunker Hermetic Door",  type:"special",note:"Requires activation", pct:{x:0.38,y:0.19}, requireItems:[]},
+    {name:"Sewer Manhole",         type:"open",   note:"Always available — no backpack allowed", pct:{x:0.42,y:0.69}, requireItems:[]},
+    {name:"Scav Lands (Co-Op)",    type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Armored Train",      type:"timed",  note:"Spawns randomly — listen for the horn", pct:{x:0.72,y:0.88}, requireItems:[]},
-    {name:"Cliff Descent",      type:"special",note:"Requires Paracord + Red Rebel Ice Pick + NO armored rig", pct:{x:0.08,y:0.08}, requireItems:["Paracord","Red Rebel Ice Pick","Non-armored rig"]},
-    {name:"Scav Lands",         type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Hole in the Wall by the Mountains", type:"open", note:"Always available", pct:{x:0.93,y:0.64}, requireItems:[]},
+    {name:"Heating Pipe",          type:"open",   note:"Always available", pct:{x:0.55,y:0.21}, requireItems:[]},
+    {name:"Depot Hermetic Door",   type:"open",   note:"Always available", pct:{x:0.28,y:0.32}, requireItems:[]},
+    {name:"Checkpoint Fence",      type:"open",   note:"Always available", pct:{x:0.38,y:0.80}, requireItems:[]},
    ],
   },
   {id:"lighthouse",name:"Lighthouse",tier:"Advanced",diff:4,color:"#8a7a3a",
@@ -300,19 +354,24 @@ const EMAPS = [
     {name:"Southern Road Stashes",type:"stash",pct:{x:0.65,y:0.88},note:"Hidden stashes along the road",tags:["Barter item","Building material","Food","Meds"]},
    ],
    pmcExtracts:[
-    {name:"Armored Train",      type:"timed",  note:"Spawns randomly during the raid — listen for the horn, extract at the train station", pct:{x:0.18,y:0.88}, requireItems:[]},
-    {name:"Side Tunnel",        type:"special",note:"Requires Paracord + Red Rebel Ice Pick + NO armored rig. Same cliff-descent conditions as Reserve.", pct:{x:0.06,y:0.45}, requireItems:["Paracord","Red Rebel Ice Pick","Non-armored rig"]},
-    {name:"South Road V-Ex",    type:"pay",    note:"Pay 3,000 roubles to the vehicle — south road exit", pct:{x:0.82,y:0.95}, requireItems:["3,000 roubles"]},
-    {name:"North V-Ex",         type:"pay",    note:"Pay 3,000 roubles to the vehicle — north road exit", pct:{x:0.25,y:0.06}, requireItems:["3,000 roubles"]},
-    {name:"Lighthouse Island",  type:"open",   note:"Always available once you reach the island via boat area — accessible from the south coast", pct:{x:0.88,y:0.22}, requireItems:[]},
+    {name:"Mountain Pass",             type:"special",note:"Requires Paracord + Red Rebel + no armored rig", pct:{x:0.65,y:0.58}, requireItems:["Paracord","Red Rebel Ice Pick"]},
+    {name:"Northern Checkpoint",       type:"open",   note:"Always available", pct:{x:0.38,y:0.02}, requireItems:[]},
+    {name:"Passage by the Lake",       type:"open",   note:"Always available", pct:{x:0.83,y:0.25}, requireItems:[]},
+    {name:"Path to Shoreline",         type:"open",   note:"Always available", pct:{x:0.83,y:0.51}, requireItems:[]},
+    {name:"Southern Road",             type:"open",   note:"Always available", pct:{x:0.76,y:0.82}, requireItems:[]},
+    {name:"Road to Military Base V-Ex",type:"pay",    note:"Pay roubles", pct:{x:0.80,y:0.12}, requireItems:["Roubles"]},
+    {name:"Armored Train",             type:"timed",  note:"Spawns randomly — listen for horn", pct:{x:0.48,y:0.07}, requireItems:[]},
+    {name:"Side Tunnel (Co-Op)",       type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Armored Train",      type:"timed",  note:"Spawns randomly", pct:{x:0.18,y:0.88}, requireItems:[]},
-    {name:"South Road",         type:"open",   note:"Always available", pct:{x:0.82,y:0.95}, requireItems:[]},
-    {name:"North Road",         type:"open",   note:"Always available", pct:{x:0.25,y:0.06}, requireItems:[]},
+    {name:"Path to Shoreline",         type:"open",   note:"Always available", pct:{x:0.83,y:0.51}, requireItems:[]},
+    {name:"Southern Road Landslide",   type:"open",   note:"Always available", pct:{x:0.75,y:0.82}, requireItems:[]},
+    {name:"Hideout Under the Landing Stage", type:"open", note:"Always available", pct:{x:0.36,y:0.75}, requireItems:[]},
+    {name:"Scav Hideout at the Grotto",type:"open",   note:"Always available", pct:{x:0.32,y:0.30}, requireItems:[]},
+    {name:"Industrial Zone Gates",     type:"open",   note:"Always available", pct:{x:0.63,y:0.12}, requireItems:[]},
    ],
   },
-  {id:"streets",name:"Streets",tier:"Advanced",diff:4,color:"#8a4a4a",
+  {id:"streets-of-tarkov",name:"Streets",tier:"Advanced",diff:4,color:"#8a4a4a",
    desc:"Massive urban map. The Goons roam here.",bosses:["The Goons (roaming)","Kolontay + guards"],
    wiki:"https://escapefromtarkov.fandom.com/wiki/Streets_of_Tarkov",mapgenie:"https://mapgenie.io/tarkov/maps/streets-of-tarkov",tarkovdev:"https://tarkov.dev/map/streets-of-tarkov",
    lootPoints:[
@@ -324,16 +383,25 @@ const EMAPS = [
     {name:"Underground Parking",type:"stash",pct:{x:0.5,y:0.7},note:"Weapon crates, duffle bags, stashes",tags:["Weapon","Barter item","Building material","Tool"]},
    ],
    pmcExtracts:[
-    {name:"Damaged House",      type:"open",   note:"Always available — northwest area, collapsed building entrance", pct:{x:0.08,y:0.12}, requireItems:[]},
-    {name:"Klimov Street",      type:"open",   note:"Always available — south side near the intersection", pct:{x:0.45,y:0.92}, requireItems:[]},
-    {name:"Cardinal",           type:"open",   note:"Always available — northeast area, Cardinal Hotel side exit", pct:{x:0.88,y:0.15}, requireItems:[]},
-    {name:"Primorsky Ave Taxi", type:"pay",    note:"Pay 3,000 roubles to the taxi — northwest corner of Primorsky Ave", pct:{x:0.12,y:0.35}, requireItems:["3,000 roubles"]},
-    {name:"Scav Checkpoint",    type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Courtyard",              type:"open",   note:"Always available", pct:{x:0.78,y:0.96}, requireItems:[]},
+    {name:"Damaged House",          type:"open",   note:"Always available", pct:{x:0.95,y:0.77}, requireItems:[]},
+    {name:"Crash Site",             type:"open",   note:"Always available", pct:{x:0.02,y:0.85}, requireItems:[]},
+    {name:"Sewer River",            type:"open",   note:"Always available — underground sewer exit", pct:{x:0.98,y:0.62}, requireItems:[]},
+    {name:"Collapsed Crane",        type:"open",   note:"Always available", pct:{x:0.18,y:0.69}, requireItems:[]},
+    {name:"Expo Checkpoint",        type:"open",   note:"Always available", pct:{x:0.18,y:0.23}, requireItems:[]},
+    {name:"Smugglers' Basement",    type:"open",   note:"Always available", pct:{x:0.41,y:0.42}, requireItems:[]},
+    {name:"Stylobate Building Elevator", type:"key", note:"Requires key", pct:{x:0.61,y:0.27}, requireItems:["Stylobate key"]},
+    {name:"Primorsky Ave Taxi V-Ex",type:"pay",    note:"Pay roubles for taxi extraction", pct:{x:0.54,y:0.91}, requireItems:["Roubles"]},
+    {name:"Klimov Street (Flare)",  type:"special",note:"Requires flare signal", pct:{x:0.97,y:0.41}, requireItems:["Flare"]},
+    {name:"Pinewood Basement (Co-Op)", type:"coop", note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Damaged House",      type:"open",   note:"Always available", pct:{x:0.08,y:0.12}, requireItems:[]},
-    {name:"Klimov Street",      type:"open",   note:"Always available", pct:{x:0.45,y:0.92}, requireItems:[]},
-    {name:"Scav Checkpoint",    type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
+    {name:"Entrance to Catacombs",  type:"open",   note:"Always available — underground entrance", pct:{x:0.95,y:0.65}, requireItems:[]},
+    {name:"Ventilation Shaft",      type:"open",   note:"Always available", pct:{x:0.74,y:0.87}, requireItems:[]},
+    {name:"Sewer Manhole",          type:"open",   note:"Always available — sewer access", pct:{x:0.08,y:0.77}, requireItems:[]},
+    {name:"Near Kamchatskaya Arch", type:"open",   note:"Always available — near the arch", pct:{x:0.11,y:0.42}, requireItems:[]},
+    {name:"Cardinal Apartment Complex Parking", type:"open", note:"Always available — parking area", pct:{x:0.36,y:0.16}, requireItems:[]},
+    {name:"Klimov Shopping Mall Exfil", type:"open", note:"Always available — mall area", pct:{x:0.81,y:0.35}, requireItems:[]},
    ],
   },
   {id:"ground-zero",name:"Ground Zero",tier:"Beginner",diff:1,color:"#6a8a5a",
@@ -346,17 +414,20 @@ const EMAPS = [
     {name:"Residential Buildings",type:"stash",pct:{x:0.6,y:0.4},note:"Jackets, stashes, loose loot",tags:["Key","Barter item","Food","Building material"]},
    ],
    pmcExtracts:[
-    {name:"Police Checkpoint",   type:"open",   note:"Always available — west side of the map near the police barricade", pct:{x:0.08,y:0.45}, requireItems:[]},
-    {name:"Scav Checkpoint",     type:"open",   note:"Always available — east side road exit", pct:{x:0.92,y:0.5}, requireItems:[]},
-    {name:"Emercom Checkpoint",  type:"open",   note:"Always available — south side near the medical camp", pct:{x:0.5,y:0.92}, requireItems:[]},
+    {name:"Police Cordon V-Ex",       type:"pay",    note:"Pay roubles", pct:{x:0.77,y:0.49}, requireItems:["Roubles"]},
+    {name:"Tartowers Sales Office",   type:"open",   note:"Always available", pct:{x:0.17,y:0.53}, requireItems:[]},
+    {name:"Emercom Checkpoint",       type:"open",   note:"Always available", pct:{x:0.28,y:0.05}, requireItems:[]},
+    {name:"Nakatani Basement Stairs", type:"open",   note:"Always available", pct:{x:0.76,y:0.94}, requireItems:[]},
+    {name:"Mira Ave (Flare)",         type:"special",note:"Requires flare", pct:{x:0.09,y:0.18}, requireItems:["Flare"]},
+    {name:"Scav Checkpoint (Co-op)",  type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
    scavExtracts:[
-    {name:"Police Checkpoint",   type:"open",   note:"Always available", pct:{x:0.08,y:0.45}, requireItems:[]},
-    {name:"Scav Checkpoint",     type:"open",   note:"Always available", pct:{x:0.92,y:0.5}, requireItems:[]},
-    {name:"Emercom Checkpoint",  type:"open",   note:"Always available", pct:{x:0.5,y:0.92}, requireItems:[]},
+    {name:"Emercom Checkpoint",       type:"open",   note:"Always available", pct:{x:0.28,y:0.05}, requireItems:[]},
+    {name:"Nakatani Basement Stairs", type:"open",   note:"Always available", pct:{x:0.76,y:0.94}, requireItems:[]},
+    {name:"Scav Checkpoint (Co-op)",  type:"coop",   note:"NOT usable in PvE", pct:null, requireItems:[]},
    ],
   },
-  {id:"labs",name:"The Lab",tier:"Endgame",diff:5,color:"#4a8a8a",
+  {id:"the-lab",name:"The Lab",tier:"Endgame",diff:5,color:"#4a8a8a",
    desc:"Raiders everywhere. Keycards to extract.",bosses:["Raiders (entire map)","Facility Guards"],
    wiki:"https://escapefromtarkov.fandom.com/wiki/The_Lab",mapgenie:"https://mapgenie.io/tarkov/maps/the-lab",tarkovdev:"https://tarkov.dev/map/the-lab",
    lootPoints:[
@@ -367,20 +438,39 @@ const EMAPS = [
     {name:"Blue Lab",type:"tech",pct:{x:0.7,y:0.4},note:"Tech spawns, electronics, lab equipment",tags:["Electronics","Info","Barter item"]},
    ],
    pmcExtracts:[
-    {name:"Parking Gate",       type:"key",    note:"Requires Red Keycard — parking level exit. The Red Card is extremely valuable.", pct:{x:0.15,y:0.88}, requireItems:["Red Keycard"]},
-    {name:"Hangar Gate",        type:"key",    note:"Requires Blue Keycard — hangar exit on the east side.", pct:{x:0.88,y:0.55}, requireItems:["Blue Keycard"]},
-    {name:"Elevator (Main)",    type:"key",    note:"Requires Manager Office Key — main floor elevator exit.", pct:{x:0.52,y:0.45}, requireItems:["Manager Office Key"]},
+    {name:"Hangar Gate",        type:"key",    note:"Requires keycard", pct:{x:0.81,y:0.56}, requireItems:["Keycard"]},
+    {name:"Parking Gate",       type:"key",    note:"Requires keycard", pct:{x:0.15,y:0.27}, requireItems:["Keycard"]},
+    {name:"Sewage Conduit",     type:"open",   note:"Always available — no backpack", pct:{x:0.77,y:0.79}, requireItems:[]},
+    {name:"Ventilation Shaft",  type:"open",   note:"Always available", pct:{x:0.28,y:0.69}, requireItems:[]},
+    {name:"Cargo Elevator",     type:"open",   note:"Always available", pct:{x:0.24,y:0.84}, requireItems:[]},
+    {name:"Main Elevator",      type:"open",   note:"Always available", pct:{x:0.50,y:0.02}, requireItems:[]},
+    {name:"Medical Block Elevator", type:"open", note:"Always available", pct:{x:0.47,y:0.84}, requireItems:[]},
    ],
-   scavExtracts:[
-    {name:"Parking Gate",       type:"key",    note:"Requires Red Keycard", pct:{x:0.15,y:0.88}, requireItems:["Red Keycard"]},
-    {name:"Hangar Gate",        type:"key",    note:"Requires Blue Keycard", pct:{x:0.88,y:0.55}, requireItems:["Blue Keycard"]},
-   ],
+   scavExtracts:[],
   },
 ];
 
+// ─── MAP COORDINATE BOUNDS ──────────────────────────────────────────────
+// Derived from tarkov.dev maps.json transform + coordinateRotation data.
+// SVG maps are drawn inverted; these bounds map game world coords → SVG 0-1 pct.
+// {left,right,top,bottom} = game coordinate value at each SVG edge.
+// swap: true if axes are swapped (90°/270° rotation maps).
+const MAP_BOUNDS = {
+  customs:             {left:698,right:-372,top:-307,bottom:237},
+  factory:             {left:67.4,right:-64.5,top:77,bottom:-65.5,swap:true},
+  woods:               {left:646,right:-761,top:-914,bottom:442},
+  interchange:         {left:598,right:-433,top:-442,bottom:426},
+  shoreline:           {left:504,right:-1056,top:-415,bottom:618},
+  reserve:             {left:289,right:-303,top:-293,bottom:244},
+  lighthouse:          {left:515,right:-545,top:-998,bottom:725},
+  "streets-of-tarkov": {left:323,right:-280,top:-295,bottom:532},
+  "the-lab":           {left:-477,right:-193,top:-287,bottom:-80,swap:true},
+  "ground-zero":       {left:249,right:-99,top:-124,bottom:364},
+};
+
 // ─── ROUTE UTILS ─────────────────────────────────────────────────────────
-function worldToPct(pos,bounds){if(!pos||!bounds)return null;const{bottom,left,top,right}=bounds;const x=(pos.x-left)/(right-left);const y=(pos.z-top)/(bottom-top);if(isNaN(x)||isNaN(y))return null;if(x<-0.05||x>1.05||y<-0.05||y>1.05)return null;return{x:Math.max(0.02,Math.min(0.98,x)),y:Math.max(0.02,Math.min(0.98,y))};}
-function nearestNeighbor(waypoints){if(!waypoints.length)return[];const origin={pct:{x:0.5,y:0.85}};const remaining=[...waypoints];const route=[];let cur=origin;while(remaining.length){const hasPos=remaining.some(w=>w.pct);if(!hasPos){route.push(...remaining);break;}let best=0,bestD=Infinity;remaining.forEach((w,i)=>{if(!w.pct)return;const d=Math.hypot(w.pct.x-cur.pct.x,w.pct.y-cur.pct.y);if(d<bestD){bestD=d;best=i;}});const next=remaining.splice(best,1)[0];route.push(next);if(next.pct)cur={pct:next.pct};}return route;}
+function worldToPct(pos,bounds){if(!pos||!bounds)return null;const{left,right,top,bottom}=bounds;const gx=bounds.swap?pos.z:pos.x;const gz=bounds.swap?pos.x:pos.z;const x=(gx-left)/(right-left);const y=(gz-top)/(bottom-top);if(isNaN(x)||isNaN(y))return null;if(x<-0.05||x>1.05||y<-0.05||y>1.05)return null;return{x:Math.max(0.02,Math.min(0.98,x)),y:Math.max(0.02,Math.min(0.98,y))};}
+function nearestNeighbor(waypoints){if(!waypoints.length)return[];const origin={pct:{x:0.5,y:0.5}};const remaining=[...waypoints];const route=[];let cur=origin;while(remaining.length){const hasPos=remaining.some(w=>w.pct);if(!hasPos){route.push(...remaining);break;}let best=0,bestD=Infinity;remaining.forEach((w,i)=>{if(!w.pct)return;const d=Math.hypot(w.pct.x-cur.pct.x,w.pct.y-cur.pct.y);if(d<bestD){bestD=d;best=i;}});const next=remaining.splice(best,1)[0];route.push(next);if(next.pct)cur={pct:next.pct};}return route;}
 function getObjMeta(obj){const t=obj.type;if(t==="shoot")return{icon:"☠",color:"#e05a5a",summary:`Kill ${obj.count>1?obj.count+"× ":""}${obj.targetNames?.[0]||"enemy"}${obj.zoneNames?.length?" ("+obj.zoneNames[0]+")":""}`,isCountable:true,total:obj.count||1};if(t==="findItem"||t==="giveItem")return{icon:"◈",color:"#d4b84a",summary:`${obj.count>1?obj.count+"× ":""}${obj.items?.[0]?.name||"item"}${obj.foundInRaid?" (FIR)":""}`,isCountable:obj.count>1,total:obj.count||1};if(t==="findQuestItem"||t==="giveQuestItem")return{icon:"◈",color:"#d4b84a",summary:obj.questItem?.name||obj.description,isCountable:false,total:1};if(t==="visit"||t==="mark")return{icon:"◉",color:"#9a7aba",summary:obj.description,isCountable:false,total:1};if(t==="extract")return{icon:"⬆",color:"#5dba5d",summary:obj.exitName?`Extract via ${obj.exitName}`:"Extract from map",isCountable:false,total:1};return{icon:"♦",color:"#7a9a7a",summary:obj.description||t,isCountable:false,total:1};}
 
 // ─── MAP RECOMMENDATION ──────────────────────────────────────────────────
@@ -416,6 +506,25 @@ function computeMapRecommendation(profiles, apiTasks) {
   return Object.values(mapStats)
     .sort((a, b) => b.totalTasks - a.totalTasks || b.totalIncomplete - a.totalIncomplete)
     .map((ms, i) => ({ ...ms, rank: i + 1, playerCount: Object.keys(ms.players).length, playerList: Object.values(ms.players) }));
+}
+
+function computeQuickTasks(profiles, mapId, apiTasks, tasksPerPerson) {
+  const result = {};
+  profiles.forEach(profile => {
+    const incomplete = (profile.tasks || []).filter(t => {
+      const at = apiTasks?.find(x => x.id === t.taskId);
+      if (!at || at.map?.id !== mapId) return false;
+      const objs = (at.objectives || []).filter(o => !o.optional);
+      if (!objs.length) return false;
+      const done = objs.filter(obj => {
+        const k = `${profile.id}-${t.taskId}-${obj.id}`;
+        return ((profile.progress || {})[k] || 0) >= getObjMeta(obj).total;
+      }).length;
+      return done < objs.length;
+    });
+    result[profile.id] = incomplete.slice(0, tasksPerPerson).map(t => t.taskId);
+  });
+  return result;
 }
 
 // Container type → item keyword affinity for scoring
@@ -471,9 +580,10 @@ function computeItemRecommendation(neededItems, apiMaps) {
 }
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────
-const SL=({c,s={}})=><div style={{fontSize:8,color:T.textDim,letterSpacing:4,marginBottom:8,fontFamily:T.mono,...s}}>{c}</div>;
-const Badge=({label,color,small})=><span style={{background:color+"22",color,border:`1px solid ${color}44`,padding:small?"1px 5px":"2px 7px",fontSize:small?7:8,letterSpacing:1.5,fontFamily:T.mono,whiteSpace:"nowrap"}}>{label}</span>;
-const Btn=({ch,onClick,active,color=T.gold,small,style={},disabled})=><button onClick={disabled?undefined:onClick} style={{background:active?color+"22":"transparent",color:disabled?T.textDim:(active?color:T.textDim),border:`1px solid ${active?color:T.border}`,padding:small?"4px 8px":"7px 12px",fontSize:small?8:9,letterSpacing:2,cursor:disabled?"default":"pointer",fontFamily:T.mono,textTransform:"uppercase",whiteSpace:"nowrap",...style}}>{ch}</button>;
+const SL=({c,s={}})=><div style={{fontSize:T.fs1,color:T.textDim,letterSpacing:4,marginBottom:T.sp2,fontFamily:T.mono,...s}}>{c}</div>;
+const Badge=({label,color,small})=><span style={{background:color+"22",color,border:`1px solid ${color}44`,padding:small?`2px 6px`:`${T.sp1}px ${T.sp2}px`,fontSize:small?T.fs1:T.fs2,letterSpacing:1.5,fontFamily:T.mono,whiteSpace:"nowrap"}}>{label}</span>;
+// Button sizes: small (fs1/sp1), medium (fs2/sp2), large (fs3/sp3)
+const Btn=({ch,onClick,active,color=T.gold,small,style={},disabled})=><button onClick={disabled?undefined:onClick} style={{background:active?color+"22":"transparent",color:disabled?T.textDim:(active?color:T.textDim),border:`2px solid ${active?color:T.border}`,padding:small?`${T.sp1}px ${T.sp2}px`:`${T.sp2}px ${T.sp4}px`,fontSize:small?T.fs2:T.fs3,letterSpacing:2,cursor:disabled?"default":"pointer",fontFamily:T.mono,textTransform:"uppercase",whiteSpace:"nowrap",fontWeight:active?"bold":"normal",transition:"background 0.15s, border-color 0.15s",...style}}>{ch}</button>;
 
 function Tip({ text, step }) {
   const [open, setOpen] = useState(false);
@@ -486,7 +596,7 @@ function Tip({ text, step }) {
           background: open ? "#2a3a2a" : "transparent",
           border: `1px solid ${open ? T.gold : "#3a4a3a"}`,
           color: open ? T.gold : "#5a6a5a",
-          fontSize: 9, fontWeight: "bold", fontFamily: T.mono,
+          fontSize: 17, fontWeight: "bold", fontFamily: T.mono,
           cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
           padding: 0, marginLeft: 6, flexShrink: 0,
         }}
@@ -497,16 +607,16 @@ function Tip({ text, step }) {
           style={{
             position: "absolute", top: 22, left: -8, zIndex: 50,
             background: "#0d1a0d", border: `1px solid ${T.gold}55`,
-            borderLeft: `2px solid ${T.gold}`,
+            borderLeft: `3px solid ${T.gold}`,
             padding: "8px 10px", minWidth: 220, maxWidth: 280,
             boxShadow: "0 4px 16px rgba(0,0,0,0.6)",
           }}
         >
-          {step && <div style={{ fontSize: 7, letterSpacing: 3, color: T.gold, marginBottom: 4, fontFamily: T.mono }}>{step}</div>}
-          <div style={{ fontSize: 10, color: T.text, lineHeight: 1.6, fontFamily: T.mono }}>{text}</div>
+          {step && <div style={{ fontSize: 16, letterSpacing: 3, color: T.gold, marginBottom: 4, fontFamily: T.mono }}>{step}</div>}
+          <div style={{ fontSize: 20, color: T.text, lineHeight: 1.6, fontFamily: T.mono }}>{text}</div>
           <button
             onClick={(e) => { e.stopPropagation(); setOpen(false); }}
-            style={{ background: "transparent", border: "none", color: "#5a6a5a", fontSize: 8, cursor: "pointer", fontFamily: T.mono, padding: "4px 0 0", letterSpacing: 1 }}
+            style={{ background: "transparent", border: "none", color: "#5a6a5a", fontSize: 16, cursor: "pointer", fontFamily: T.mono, padding: "4px 0 0", letterSpacing: 1 }}
           >DISMISS</button>
         </div>
       )}
@@ -517,7 +627,7 @@ function Tip({ text, step }) {
 // ─── HIDEOUT MANAGER ─────────────────────────────────────────────────────
 function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget, onBack }) {
   const [prereqPrompt, setPrereqPrompt] = useState(null); // { stationName, level, unmet: [{stationId, stationName, level}] }
-  if (!apiHideout?.length) return <div style={{ color: T.textDim, fontSize: 10, padding: 20, textAlign: "center" }}>Loading hideout data...</div>;
+  if (!apiHideout?.length) return <div style={{ color: T.textDim, fontSize: 20, padding: 20, textAlign: "center" }}>Loading hideout data...</div>;
 
   const stations = apiHideout.filter(s => s.levels.length > 0).sort((a, b) => a.name.localeCompare(b.name));
   const target = hideoutTarget ? stations.find(s => s.id === hideoutTarget.stationId) : null;
@@ -555,7 +665,7 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
-        <button onClick={onBack} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 9, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 8 }}>← BACK</button>
+        <button onClick={onBack} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 17, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 8 }}>← BACK</button>
         <SL c={<>HIDEOUT UPGRADES<Tip text="Set your current hideout levels, then pick which upgrade you're working toward. The Squad tab will recommend maps where you're most likely to find the items you need." /></>} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
@@ -564,22 +674,22 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
           <div style={{ background: "#0a1518", border: "1px solid #1a3a3a", borderLeft: "3px solid #4ababa", padding: 12, marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div>
-                <div style={{ fontSize: 7, letterSpacing: 3, color: "#4ababa", marginBottom: 2 }}>TARGET UPGRADE</div>
-                <div style={{ fontSize: 12, color: T.textBright, fontWeight: "bold" }}>{target.name} → Level {hideoutTarget.level}</div>
+                <div style={{ fontSize: 16, letterSpacing: 3, color: "#4ababa", marginBottom: 2 }}>TARGET UPGRADE</div>
+                <div style={{ fontSize: 17, color: T.textBright, fontWeight: "bold" }}>{target.name} → Level {hideoutTarget.level}</div>
               </div>
-              <button onClick={() => saveHideoutTarget(null)} style={{ background: "transparent", border: `1px solid #6a2a2a`, color: "#e05a5a", padding: "3px 8px", fontSize: 8, cursor: "pointer", fontFamily: T.mono }}>CLEAR</button>
+              <button onClick={() => saveHideoutTarget(null)} style={{ background: "transparent", border: `1px solid #6a2a2a`, color: "#e05a5a", padding: "4px 8px", fontSize: 17, cursor: "pointer", fontFamily: T.mono }}>CLEAR</button>
             </div>
-            <div style={{ fontSize: 8, letterSpacing: 2, color: T.textDim, marginBottom: 6 }}>ITEMS NEEDED:</div>
+            <div style={{ fontSize: 16, letterSpacing: 2, color: T.textDim, marginBottom: 6 }}>ITEMS NEEDED:</div>
             {targetLevel.itemRequirements.map((req, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: `1px solid ${T.border}` }}>
-                <span style={{ fontSize: 10, color: T.text }}>{req.item.name}</span>
+                <span style={{ fontSize: 20, color: T.text }}>{req.item.name}</span>
                 <Badge label={`×${req.count}`} color="#4ababa" small />
               </div>
             ))}
             {targetLevel.traderRequirements?.length > 0 && (
               <div style={{ marginTop: 6 }}>
                 {targetLevel.traderRequirements.map((req, i) => (
-                  <div key={i} style={{ fontSize: 9, color: "#ba9a4a", marginTop: 2 }}>Requires {req.trader.name} LL{req.level}</div>
+                  <div key={i} style={{ fontSize: 17, color: "#ba9a4a", marginTop: 2 }}>Requires {req.trader.name} LL{req.level}</div>
                 ))}
               </div>
             )}
@@ -587,7 +697,7 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
               <div style={{ marginTop: 4 }}>
                 {targetLevel.stationLevelRequirements.map((req, i) => {
                   const met = (hideoutLevels[req.station.id] || 0) >= req.level;
-                  return <div key={i} style={{ fontSize: 9, color: met ? "#5dba5d" : "#e05a5a", marginTop: 2 }}>{met ? "✓" : "✕"} {req.station.name} Level {req.level}</div>;
+                  return <div key={i} style={{ fontSize: 17, color: met ? "#5dba5d" : "#e05a5a", marginTop: 2 }}>{met ? "✓" : "✕"} {req.station.name} Level {req.level}</div>;
                 })}
               </div>
             )}
@@ -597,8 +707,8 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
         {/* Prerequisite prompt */}
         {prereqPrompt && (
           <div style={{ background: "#1a1408", border: "1px solid #5a4a1a", borderLeft: "3px solid #ba8a4a", padding: 12, marginBottom: 14 }}>
-            <div style={{ fontSize: 8, letterSpacing: 3, color: "#ba8a4a", marginBottom: 6 }}>PREREQUISITES NEEDED</div>
-            <div style={{ fontSize: 10, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>
+            <div style={{ fontSize: 16, letterSpacing: 3, color: "#ba8a4a", marginBottom: 6 }}>PREREQUISITES NEEDED</div>
+            <div style={{ fontSize: 20, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>
               <span style={{ color: T.textBright, fontWeight: "bold" }}>{prereqPrompt.stationName} Level {prereqPrompt.level}</span> requires upgrades you don't have yet. Target a prerequisite first?
             </div>
             {prereqPrompt.unmet.map((req, i) => {
@@ -607,16 +717,16 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
               return (
                 <button key={i} onClick={() => { saveHideoutTarget({ stationId: req.stationId, level: req.level }); setPrereqPrompt(null); }}
                   style={{ width: "100%", background: "#0a1518", border: "1px solid #2a4a4a", padding: "8px 10px", marginBottom: 4, cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 10, color: "#4ababa", fontWeight: "bold" }}>{req.stationName} → Level {req.level}</div>
-                  {prereqItems.length > 0 && <div style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>{prereqItems.slice(0, 4).map(r => `${r.item.shortName || r.item.name} ×${r.count}`).join(", ")}{prereqItems.length > 4 ? " ..." : ""}</div>}
+                  <div style={{ fontSize: 20, color: "#4ababa", fontWeight: "bold" }}>{req.stationName} → Level {req.level}</div>
+                  {prereqItems.length > 0 && <div style={{ fontSize: 16, color: T.textDim, marginTop: 2 }}>{prereqItems.slice(0, 4).map(r => `${r.item.shortName || r.item.name} ×${r.count}`).join(", ")}{prereqItems.length > 4 ? " ..." : ""}</div>}
                 </button>
               );
             })}
             <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
               <button onClick={() => { saveHideoutTarget({ stationId: prereqPrompt.stationId, level: prereqPrompt.level }); setPrereqPrompt(null); }}
-                style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "6px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>TARGET ANYWAY</button>
+                style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "6px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>TARGET ANYWAY</button>
               <button onClick={() => setPrereqPrompt(null)}
-                style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "6px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>CANCEL</button>
+                style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "6px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>CANCEL</button>
             </div>
           </div>
         )}
@@ -637,11 +747,11 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
                 padding: "8px 10px",
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <div style={{ fontSize: 11, color: curLevel >= maxLevel ? "#5dba5d" : T.textBright, fontWeight: "bold" }}>
+                  <div style={{ fontSize: 16, color: curLevel >= maxLevel ? "#5dba5d" : T.textBright, fontWeight: "bold" }}>
                     {station.name}
-                    {curLevel >= maxLevel && <span style={{ fontSize: 8, color: "#3a8a3a", marginLeft: 5 }}>MAX</span>}
+                    {curLevel >= maxLevel && <span style={{ fontSize: 16, color: "#3a8a3a", marginLeft: 5 }}>MAX</span>}
                   </div>
-                  <div style={{ fontSize: 9, color: T.textDim }}>Lv {curLevel}/{maxLevel}</div>
+                  <div style={{ fontSize: 17, color: T.textDim }}>Lv {curLevel}/{maxLevel}</div>
                 </div>
 
                 {/* Level selector */}
@@ -649,7 +759,7 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
                   {Array.from({ length: maxLevel + 1 }, (_, i) => (
                     <button key={i} onClick={() => saveHideoutLevels({ ...hideoutLevels, [station.id]: i })}
                       style={{
-                        width: 28, height: 24, fontSize: 9, fontFamily: T.mono,
+                        width: 28, height: 24, fontSize: 17, fontFamily: T.mono,
                         background: curLevel === i ? T.gold + "22" : "transparent",
                         border: `1px solid ${curLevel === i ? T.gold : T.border}`,
                         color: curLevel === i ? T.gold : (i <= curLevel ? "#5dba5d" : T.textDim),
@@ -762,13 +872,13 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
         }}
       >
         <div>
-          <span style={{ fontSize: 8, letterSpacing: 2, color: "#4ababa" }}>{topInfo ? "RECOMMENDED: " : "FIND YOUR MAP: "}</span>
+          <span style={{ fontSize: 16, letterSpacing: 2, color: "#4ababa" }}>{topInfo ? "RECOMMENDED: " : "FIND YOUR MAP: "}</span>
           {topInfo ? <>
-            <span style={{ fontSize: 10, color: T.textBright, fontWeight: "bold" }}>{topInfo.name}</span>
-            <span style={{ fontSize: 9, color: T.textDim, marginLeft: 6 }}>{topInfo.desc}</span>
-          </> : <span style={{ fontSize: 10, color: T.textDim }}>Select what you're looking for</span>}
+            <span style={{ fontSize: 20, color: T.textBright, fontWeight: "bold" }}>{topInfo.name}</span>
+            <span style={{ fontSize: 17, color: T.textDim, marginLeft: 6 }}>{topInfo.desc}</span>
+          </> : <span style={{ fontSize: 20, color: T.textDim }}>Select what you're looking for</span>}
         </div>
-        <span style={{ fontSize: 10, color: "#4ababa", flexShrink: 0 }}>{expanded ? "▴" : "▾"}</span>
+        <span style={{ fontSize: 20, color: "#4ababa", flexShrink: 0 }}>{expanded ? "▴" : "▾"}</span>
       </button>
 
       {/* Expanded breakdown */}
@@ -797,16 +907,16 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
             return <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 7, letterSpacing: 3, color: "#4ababa", marginBottom: 3 }}>BEST MAP FOR TASKS ({scope})</div>
-                  <div style={{ fontSize: 14, color: T.textBright, fontWeight: "bold" }}>{top.mapName}</div>
-                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{top.totalTasks} task{top.totalTasks !== 1 ? "s" : ""} · {top.totalIncomplete} objective{top.totalIncomplete !== 1 ? "s" : ""}</div>
+                  <div style={{ fontSize: 16, letterSpacing: 3, color: "#4ababa", marginBottom: 3 }}>BEST MAP FOR TASKS ({scope})</div>
+                  <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold" }}>{top.mapName}</div>
+                  <div style={{ fontSize: 17, color: T.textDim, marginTop: 2 }}>{top.totalTasks} task{top.totalTasks !== 1 ? "s" : ""} · {top.totalIncomplete} objective{top.totalIncomplete !== 1 ? "s" : ""}</div>
                 </div>
-                {!isTopSel ? <button onClick={(e) => { e.stopPropagation(); onSelectMap(top.mapId); }} style={{ background: "#4ababa22", border: "1px solid #4ababa", color: "#4ababa", padding: "6px 12px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, whiteSpace: "nowrap", flexShrink: 0 }}>SELECT</button> : <Badge label="SELECTED" color="#4ababa" />}
+                {!isTopSel ? <button onClick={(e) => { e.stopPropagation(); onSelectMap(top.mapId); }} style={{ background: "#4ababa22", border: "1px solid #4ababa", color: "#4ababa", padding: "6px 12px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, whiteSpace: "nowrap", flexShrink: 0 }}>SELECT</button> : <Badge label="SELECTED" color="#4ababa" />}
               </div>
               {top.playerList.map(pl => (
-                <div key={pl.name} style={{ borderLeft: `2px solid ${pl.color}`, paddingLeft: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 9, color: pl.color, fontWeight: "bold", marginBottom: 3 }}>{pl.name}{pl.isMe ? <span style={{ fontSize: 7, color: T.textDim, fontWeight: "normal", marginLeft: 4 }}>YOU</span> : ""}</div>
-                  {pl.tasks.map((t, i) => <div key={i} style={{ fontSize: 9, color: T.textDim, marginBottom: 2, paddingLeft: 4 }}>★ {t.taskName} — <span style={{ color: t.remaining === t.total ? "#7a8a7a" : "#ba9a4a" }}>{t.remaining}/{t.total} obj</span></div>)}
+                <div key={pl.name} style={{ borderLeft: `3px solid ${pl.color}`, paddingLeft: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 17, color: pl.color, fontWeight: "bold", marginBottom: 3 }}>{pl.name}{pl.isMe ? <span style={{ fontSize: 7, color: T.textDim, fontWeight: "normal", marginLeft: 4 }}>YOU</span> : ""}</div>
+                  {pl.tasks.map((t, i) => <div key={i} style={{ fontSize: 17, color: T.textDim, marginBottom: 2, paddingLeft: 4 }}>★ {t.taskName} — <span style={{ color: t.remaining === t.total ? "#7a8a7a" : "#ba9a4a" }}>{t.remaining}/{t.total} obj</span></div>)}
                 </div>
               ))}
             </>;
@@ -818,22 +928,22 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
             return <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <div>
-                  <div style={{ fontSize: 7, letterSpacing: 3, color: "#ba8a4a", marginBottom: 3 }}>BEST MAP FOR HIDEOUT ITEMS</div>
-                  <div style={{ fontSize: 14, color: T.textBright, fontWeight: "bold" }}>{top.mapName}</div>
-                  <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{top.totalContainers} containers · {top.affinityScore > 0 ? "high" : "average"} relevance</div>
+                  <div style={{ fontSize: 16, letterSpacing: 3, color: "#ba8a4a", marginBottom: 3 }}>BEST MAP FOR HIDEOUT ITEMS</div>
+                  <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold" }}>{top.mapName}</div>
+                  <div style={{ fontSize: 17, color: T.textDim, marginTop: 2 }}>{top.totalContainers} containers · {top.affinityScore > 0 ? "high" : "average"} relevance</div>
                 </div>
-                {!isTopSel ? <button onClick={(e) => { e.stopPropagation(); onSelectMap(top.mapId); }} style={{ background: "#ba8a4a22", border: "1px solid #ba8a4a", color: "#ba8a4a", padding: "6px 12px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, whiteSpace: "nowrap", flexShrink: 0 }}>SELECT</button> : <Badge label="SELECTED" color="#ba8a4a" />}
+                {!isTopSel ? <button onClick={(e) => { e.stopPropagation(); onSelectMap(top.mapId); }} style={{ background: "#ba8a4a22", border: "1px solid #ba8a4a", color: "#ba8a4a", padding: "6px 12px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, whiteSpace: "nowrap", flexShrink: 0 }}>SELECT</button> : <Badge label="SELECTED" color="#ba8a4a" />}
               </div>
               {targetStation && targetLevel && (
-                <div style={{ borderLeft: "2px solid #ba8a4a", paddingLeft: 8, marginBottom: 8 }}>
-                  <div style={{ fontSize: 9, color: "#ba8a4a", fontWeight: "bold", marginBottom: 4 }}>{targetStation.name} → Level {hideoutTarget.level}</div>
-                  {targetLevel.itemRequirements.filter(r => r.item.name !== "Roubles").map((r, i) => <div key={i} style={{ fontSize: 9, color: T.textDim, marginBottom: 2, paddingLeft: 4 }}>◈ {r.item.name} ×{r.count}</div>)}
+                <div style={{ borderLeft: "3px solid #ba8a4a", paddingLeft: 8, marginBottom: 8 }}>
+                  <div style={{ fontSize: 17, color: "#ba8a4a", fontWeight: "bold", marginBottom: 4 }}>{targetStation.name} → Level {hideoutTarget.level}</div>
+                  {targetLevel.itemRequirements.filter(r => r.item.name !== "Roubles").map((r, i) => <div key={i} style={{ fontSize: 17, color: T.textDim, marginBottom: 2, paddingLeft: 4 }}>◈ {r.item.name} ×{r.count}</div>)}
                 </div>
               )}
             </>;
           })()}
           {mode === "hideout" && !hasItemData && (
-            <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", padding: 12 }}>Set a hideout target in My Profile → Hideout to enable this.</div>
+            <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", padding: 12 }}>Set a hideout target in My Profile → Hideout to enable this.</div>
           )}
 
           {/* LOOKING FOR MODE */}
@@ -842,18 +952,18 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
               {/* Breadcrumb */}
               {lookPath.length > 0 && (
                 <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 8 }}>
-                  <button onClick={() => setLookPath([])} style={{ background: "transparent", border: "none", color: "#9a8aba", fontSize: 8, cursor: "pointer", fontFamily: T.mono, padding: 0 }}>ALL</button>
+                  <button onClick={() => setLookPath([])} style={{ background: "transparent", border: "none", color: "#9a8aba", fontSize: 16, cursor: "pointer", fontFamily: T.mono, padding: 0 }}>ALL</button>
                   {lookPath.map((id, i) => {
                     let cats = LOOK_CATS;
                     let cat = null;
                     for (let j = 0; j <= i; j++) { cat = cats.find(c => c.id === lookPath[j]); cats = cat?.subs || []; }
-                    return <span key={id} style={{ fontSize: 8, color: T.textDim }}><span style={{ margin: "0 2px" }}>›</span><button onClick={() => setLookPath(lookPath.slice(0, i + 1))} style={{ background: "transparent", border: "none", color: i === lookPath.length - 1 ? "#9a8aba" : T.textDim, fontSize: 8, cursor: "pointer", fontFamily: T.mono, padding: 0 }}>{cat?.label}</button></span>;
+                    return <span key={id} style={{ fontSize: 16, color: T.textDim }}><span style={{ margin: "0 2px" }}>›</span><button onClick={() => setLookPath(lookPath.slice(0, i + 1))} style={{ background: "transparent", border: "none", color: i === lookPath.length - 1 ? "#9a8aba" : T.textDim, fontSize: 16, cursor: "pointer", fontFamily: T.mono, padding: 0 }}>{cat?.label}</button></span>;
                   })}
                 </div>
               )}
 
               {/* Category grid */}
-              <div style={{ fontSize: 8, letterSpacing: 2, color: "#9a8aba", marginBottom: 6 }}>
+              <div style={{ fontSize: 16, letterSpacing: 2, color: "#9a8aba", marginBottom: 6 }}>
                 {lookPath.length === 0 ? "WHAT ARE YOU LOOKING FOR?" : lookCurrent?.label ? `${lookCurrent.label} — NARROW DOWN (OPTIONAL)` : "SELECT"}
                 <Tip text="Pick a broad category to see which maps are best. Optionally drill down to subcategories for more specific results." />
               </div>
@@ -861,7 +971,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
                 {(lookPath.length === 0 ? LOOK_CATS : lookChildren).map(cat => (
                   <button key={cat.id} onClick={() => setLookPath([...lookPath, cat.id])} style={{
                     background: "#9a8aba11", border: "1px solid #4a3a6a",
-                    color: T.textBright, padding: "8px 6px", fontSize: 9, cursor: "pointer",
+                    color: T.textBright, padding: "8px 6px", fontSize: 17, cursor: "pointer",
                     fontFamily: T.mono, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   }}>
                     {lookPath.length === 0 && <span style={{ fontSize: 12 }}>{cat.icon}</span>}
@@ -874,7 +984,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
               {/* Map recommendation based on selection */}
               {lookRanked.length > 0 && (
                 <div style={{ borderTop: "1px solid #3a2a5a", paddingTop: 8 }}>
-                  <div style={{ fontSize: 7, letterSpacing: 3, color: "#9a8aba", marginBottom: 6 }}>BEST MAPS FOR {(lookCurrent?.label || "").toUpperCase()}</div>
+                  <div style={{ fontSize: 16, letterSpacing: 3, color: "#9a8aba", marginBottom: 6 }}>BEST MAPS FOR {(lookCurrent?.label || "").toUpperCase()}</div>
                   {lookRanked.slice(0, 5).map((m, i) => {
                     const apiId = emapToApiId(m.mapId);
                     const isSel = selectedMapId === apiId;
@@ -882,10 +992,10 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
                       <div key={m.mapId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", marginBottom: 4, background: isSel ? "#9a8aba11" : "transparent", border: `1px solid ${isSel ? "#4a3a6a" : "#1a2a2a"}` }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span style={{ fontSize: 10, color: i === 0 ? "#9a8aba" : T.textDim, fontWeight: i === 0 ? "bold" : "normal" }}>#{i + 1} {m.mapName}</span>
-                            <span style={{ fontSize: 8, color: T.textDim }}>{m.matchCount} spot{m.matchCount !== 1 ? "s" : ""}</span>
+                            <span style={{ fontSize: 20, color: i === 0 ? "#9a8aba" : T.textDim, fontWeight: i === 0 ? "bold" : "normal" }}>#{i + 1} {m.mapName}</span>
+                            <span style={{ fontSize: 16, color: T.textDim }}>{m.matchCount} spot{m.matchCount !== 1 ? "s" : ""}</span>
                           </div>
-                          <div style={{ fontSize: 8, color: T.textDim, marginTop: 2 }}>{m.matchingSpots.slice(0, 3).join(", ")}{m.matchingSpots.length > 3 ? ` +${m.matchingSpots.length - 3}` : ""}</div>
+                          <div style={{ fontSize: 16, color: T.textDim, marginTop: 2 }}>{m.matchingSpots.slice(0, 3).join(", ")}{m.matchingSpots.length > 3 ? ` +${m.matchingSpots.length - 3}` : ""}</div>
                         </div>
                         {apiId && !isSel && <button onClick={(e) => { e.stopPropagation(); onSelectMap(apiId); }} style={{ background: "#9a8aba22", border: "1px solid #9a8aba", color: "#9a8aba", padding: "4px 10px", fontSize: 7, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, flexShrink: 0 }}>SELECT</button>}
                         {isSel && <Badge label="SELECTED" color="#9a8aba" />}
@@ -895,7 +1005,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
                 </div>
               )}
               {lookPath.length > 0 && lookRanked.length === 0 && (
-                <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", padding: 8 }}>No maps have tagged loot spots for this category.</div>
+                <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", padding: 8 }}>No maps have tagged loot spots for this category.</div>
               )}
             </div>
           )}
@@ -905,12 +1015,12 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiMaps, onSelect
             const ranked = mode === "hideout" ? itemRanked : taskRanked;
             return ranked.length > 1 ? (
               <div style={{ borderTop: `1px solid #1a2a2a`, paddingTop: 8, marginTop: 4 }}>
-                <div style={{ fontSize: 7, letterSpacing: 3, color: T.textDim, marginBottom: 6 }}>OTHER OPTIONS</div>
+                <div style={{ fontSize: 16, letterSpacing: 3, color: T.textDim, marginBottom: 6 }}>OTHER OPTIONS</div>
                 {ranked.slice(1, 4).map(m => (
                   <button key={m.mapId} onClick={(e) => { e.stopPropagation(); onSelectMap(m.mapId); }}
                     style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: selectedMapId === m.mapId ? "#4ababa11" : "transparent", border: `1px solid ${selectedMapId === m.mapId ? "#2a4a4a" : "#1a2a2a"}`, padding: "5px 8px", marginBottom: 4, cursor: "pointer", fontFamily: T.mono }}>
-                    <span style={{ fontSize: 9, color: selectedMapId === m.mapId ? "#4ababa" : T.textDim }}>#{m.rank} {m.mapName}</span>
-                    <span style={{ fontSize: 8, color: T.textDim }}>{mode === "tasks" ? `${m.totalTasks} task${m.totalTasks !== 1 ? "s" : ""}` : `${m.totalContainers} containers`}</span>
+                    <span style={{ fontSize: 17, color: selectedMapId === m.mapId ? "#4ababa" : T.textDim }}>#{m.rank} {m.mapName}</span>
+                    <span style={{ fontSize: 16, color: T.textDim }}>{mode === "tasks" ? `${m.totalTasks} task${m.totalTasks !== 1 ? "s" : ""}` : `${m.totalContainers} containers`}</span>
                   </button>
                 ))}
               </div>
@@ -963,29 +1073,29 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <span style={{ fontSize: 9, color: choice.confirmed ? cfg.color : "#e05a5a", fontWeight: "bold" }}>
+              <span style={{ fontSize: 17, color: choice.confirmed ? cfg.color : "#e05a5a", fontWeight: "bold" }}>
                 {choice.confirmed ? "⬆ " : "⚠ "}{choice.extract.name}
               </span>
               <Badge label={ET_CONFIG[choice.extract.type].label} color={cfg.color} small />
             </div>
-            <button onClick={() => onChoice(null)} style={{ background: "transparent", border: "none", color: T.textDim, cursor: "pointer", fontSize: 9, fontFamily: T.mono }}>
+            <button onClick={() => onChoice(null)} style={{ background: "transparent", border: "none", color: T.textDim, cursor: "pointer", fontSize: 17, fontFamily: T.mono }}>
               CHANGE
             </button>
           </div>
           {!choice.confirmed && choice.missingItems?.length > 0 && (
-            <div style={{ fontSize: 9, color: "#e05a5a", marginTop: 5, lineHeight: 1.5 }}>
+            <div style={{ fontSize: 17, color: "#e05a5a", marginTop: 5, lineHeight: 1.5 }}>
               ⚠ Missing: {choice.missingItems.join(", ")} — this extract may not be usable. Consider a different exit.
             </div>
           )}
           {choice.confirmed && choice.extract.type !== "open" && (
-            <div style={{ fontSize: 9, color: cfg.color, marginTop: 4, opacity: 0.8 }}>
+            <div style={{ fontSize: 17, color: cfg.color, marginTop: 4, opacity: 0.8 }}>
               ✓ Items confirmed — extract added as final route waypoint
             </div>
           )}
         </div>
       ) : (
         <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: "8px 10px" }}>
-          <div style={{ fontSize: 9, color: T.textDim, marginBottom: 7 }}>Select extract for {player.name}:</div>
+          <div style={{ fontSize: 17, color: T.textDim, marginBottom: 7 }}>Select extract for {player.name}:</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {usable.map(ext => {
               const c = ET_CONFIG[ext.type];
@@ -994,10 +1104,10 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
                   background: "transparent", border: `1px solid ${c.border}`,
                   borderLeft: `3px solid ${c.color}`, color: T.textBright,
                   padding: "7px 10px", textAlign: "left", cursor: "pointer",
-                  fontFamily: T.mono, fontSize: 10, display: "flex", justifyContent: "space-between", alignItems: "center",
+                  fontFamily: T.mono, fontSize: 20, display: "flex", justifyContent: "space-between", alignItems: "center",
                 }}>
                   <span>{ext.name}</span>
-                  <span style={{ fontSize: 8, color: c.color }}>{c.icon} {c.label}</span>
+                  <span style={{ fontSize: 16, color: c.color }}>{c.icon} {c.label}</span>
                 </button>
               );
             })}
@@ -1008,9 +1118,9 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
       {/* Item check modal */}
       {pendingExtract && (
         <div style={{ background: "#100808", border: "1px solid #6a2a1a", borderLeft: "3px solid #e05a5a", padding: 12, marginTop: 6 }}>
-          <div style={{ fontSize: 9, color: "#e05a5a", letterSpacing: 2, marginBottom: 6 }}>EXTRACT REQUIREMENTS CHECK</div>
-          <div style={{ fontSize: 12, color: T.textBright, fontWeight: "bold", marginBottom: 6 }}>{pendingExtract.name}</div>
-          <div style={{ fontSize: 10, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>{pendingExtract.note}</div>
+          <div style={{ fontSize: 17, color: "#e05a5a", letterSpacing: 2, marginBottom: 6 }}>EXTRACT REQUIREMENTS CHECK</div>
+          <div style={{ fontSize: 17, color: T.textBright, fontWeight: "bold", marginBottom: 6 }}>{pendingExtract.name}</div>
+          <div style={{ fontSize: 20, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>{pendingExtract.note}</div>
           <SL c="DO YOU HAVE THESE ITEMS IN YOUR LOADOUT?" s={{ marginBottom: 8 }} />
           {pendingExtract.requireItems.map(item => (
             <div key={item} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -1019,13 +1129,13 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
                 background: itemChecks[item] ? "#0a1a0a" : "transparent",
                 border: `1px solid ${itemChecks[item] ? "#2a6a2a" : T.borderBright}`,
                 color: itemChecks[item] ? "#5dba5d" : T.textDim,
-                cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "pointer", fontSize: 17, display: "flex", alignItems: "center", justifyContent: "center",
               }}>{itemChecks[item] ? "✓" : ""}</button>
-              <span style={{ fontSize: 10, color: itemChecks[item] ? "#5dba5d" : T.textBright }}>{item}</span>
+              <span style={{ fontSize: 20, color: itemChecks[item] ? "#5dba5d" : T.textBright }}>{item}</span>
             </div>
           ))}
           <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-            <button onClick={() => setPendingExtract(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "8px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>
+            <button onClick={() => setPendingExtract(null)} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "8px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>
               ← PICK ANOTHER
             </button>
             <button onClick={confirmItems} style={{
@@ -1033,7 +1143,7 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
               background: pendingExtract.requireItems.every(i => itemChecks[i]) ? "#0a1a0a" : "#180a0a",
               border: `1px solid ${pendingExtract.requireItems.every(i => itemChecks[i]) ? "#2a6a2a" : "#6a2a2a"}`,
               color: pendingExtract.requireItems.every(i => itemChecks[i]) ? "#5dba5d" : "#e05a5a",
-              padding: "8px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1,
+              padding: "8px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1,
             }}>
               {pendingExtract.requireItems.every(i => itemChecks[i]) ? "✓ CONFIRM — ADD TO ROUTE" : "⚠ CONFIRM ANYWAY (MISSING ITEMS)"}
             </button>
@@ -1060,12 +1170,12 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
       <div style={{ position: "relative", background: "#080d08", border: `1px solid ${T.border}` }}>
         {svgUrl && !imgErr ? (
           <>
-            {!imgLoaded && <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontSize: 10, fontFamily: T.mono }}>Loading map from tarkov.dev...</div>}
+            {!imgLoaded && <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontSize: 20, fontFamily: T.mono }}>Loading map from tarkov.dev...</div>}
             <img src={svgUrl} alt={apiMap?.name} style={{ width: "100%", display: imgLoaded ? "block" : "none" }}
               onLoad={() => setImgLoaded(true)} onError={() => setImgErr(true)} />
             {imgLoaded && (
               <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
-                viewBox="0 0 1 1" preserveAspectRatio="xMidYMid meet">
+                viewBox="0 0 1 1" preserveAspectRatio="none">
                 {/* Location labels from EMAPS loot points */}
                 {(emap?.lootPoints || []).map((lp, i) => lp.pct && (
                   <g key={`label_${i}`}>
@@ -1080,7 +1190,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
                 )}
                 {/* Spawn to first */}
                 {objWaypoints[0] && (
-                  <line x1="0.5" y1="0.85" x2={objWaypoints[0].pct.x} y2={objWaypoints[0].pct.y}
+                  <line x1="0.5" y1="0.5" x2={objWaypoints[0].pct.x} y2={objWaypoints[0].pct.y}
                     stroke="#5dba5d" strokeWidth="0.004" strokeDasharray="0.015,0.008" opacity="0.7" />
                 )}
                 {/* Last obj to extract */}
@@ -1091,8 +1201,8 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
                     stroke="#5dba5d" strokeWidth="0.005" strokeDasharray="0.02,0.01" opacity="0.8" />
                 )}
                 {/* Spawn marker */}
-                <circle cx="0.5" cy="0.85" r="0.018" fill="#0a1a0a" stroke="#5dba5d" strokeWidth="0.004" />
-                <text x="0.5" y="0.857" textAnchor="middle" fill="#5dba5d" fontSize="0.017" fontFamily={T.mono} fontWeight="bold">S</text>
+                <circle cx="0.5" cy="0.5" r="0.018" fill="#0a1a0a" stroke="#5dba5d" strokeWidth="0.004" />
+                <text x="0.5" y="0.507" textAnchor="middle" fill="#5dba5d" fontSize="0.017" fontFamily={T.mono} fontWeight="bold">S</text>
                 {/* Objective waypoints */}
                 {objWaypoints.map((w, i) => {
                   const col = w.players[0]?.color || T.gold;
@@ -1119,8 +1229,8 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           </>
         ) : (
           <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <div style={{ color: T.textDim, fontSize: 10, fontFamily: T.mono }}>{imgErr ? "Map image unavailable" : "Select a map above"}</div>
-            {apiMap && <a href={`https://tarkov.dev/map/${apiMap.normalizedName}`} target="_blank" rel="noreferrer" style={{ color: "#5a9aba", fontSize: 9, fontFamily: T.mono }}>Open on tarkov.dev →</a>}
+            <div style={{ color: T.textDim, fontSize: 20, fontFamily: T.mono }}>{imgErr ? "Map image unavailable" : "Select a map above"}</div>
+            {apiMap && <a href={`https://tarkov.dev/map/${apiMap.normalizedName}`} target="_blank" rel="noreferrer" style={{ color: "#5a9aba", fontSize: 17, fontFamily: T.mono }}>Open on tarkov.dev →</a>}
           </div>
         )}
       </div>
@@ -1128,11 +1238,11 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
       {/* Conflicts */}
       {conflicts.map(c => (
         <div key={c.id} style={{ background: "#180e02", border: "1px solid #7a5a1a", borderLeft: "3px solid #d4943a", padding: 10, marginTop: 8 }}>
-          <div style={{ fontSize: 9, color: "#d4943a", letterSpacing: 2, marginBottom: 5 }}>⚠ OVERLAPPING OBJECTIVES</div>
-          <div style={{ fontSize: 11, color: T.textBright, marginBottom: 8 }}>{c.label}</div>
+          <div style={{ fontSize: 17, color: "#d4943a", letterSpacing: 2, marginBottom: 5 }}>⚠ OVERLAPPING OBJECTIVES</div>
+          <div style={{ fontSize: 16, color: T.textBright, marginBottom: 8 }}>{c.label}</div>
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => onConflictResolve(c.id, "merge")} style={{ flex: 1, background: "#0a1a0a", border: "1px solid #2a6a2a", color: "#5dba5d", padding: "7px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono }}>✓ MERGE</button>
-            <button onClick={() => onConflictResolve(c.id, "separate")} style={{ flex: 1, background: "#0a0d18", border: "1px solid #2a3a6a", color: "#5a7aba", padding: "7px 0", fontSize: 8, cursor: "pointer", fontFamily: T.mono }}>⇄ TWO STOPS</button>
+            <button onClick={() => onConflictResolve(c.id, "merge")} style={{ flex: 1, background: "#0a1a0a", border: "1px solid #2a6a2a", color: "#5dba5d", padding: "7px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono }}>✓ MERGE</button>
+            <button onClick={() => onConflictResolve(c.id, "separate")} style={{ flex: 1, background: "#0a0d18", border: "1px solid #2a3a6a", color: "#5a7aba", padding: "7px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono }}>⇄ TWO STOPS</button>
           </div>
         </div>
       ))}
@@ -1144,7 +1254,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           {route.filter(w => !w.pct && !w.isExtract).map((w, i) => (
             <div key={w.id} style={{ display: "flex", gap: 7, alignItems: "flex-start", marginBottom: 5 }}>
               <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{w.players.map(p => <Badge key={p.playerId} label={p.name} color={p.color} small />)}</div>
-              <div style={{ fontSize: 10, color: T.text, flex: 1 }}>{w.locationName}</div>
+              <div style={{ fontSize: 20, color: T.text, flex: 1 }}>{w.locationName}</div>
             </div>
           ))}
         </div>
@@ -1156,18 +1266,18 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           <SL c="ROUTE SEQUENCE" s={{ marginBottom: 10 }} />
           {objWaypoints.map((w, i) => (
             <div key={w.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8, paddingBottom: 8, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ background: (w.isLoot ? w.players[0]?.color : T.gold) + "22", border: `1px solid ${w.isLoot ? w.players[0]?.color : T.gold}`, color: w.isLoot ? w.players[0]?.color : T.gold, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: "bold", flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div>
+              <div style={{ background: (w.isLoot ? w.players[0]?.color : T.gold) + "22", border: `1px solid ${w.isLoot ? w.players[0]?.color : T.gold}`, color: w.isLoot ? w.players[0]?.color : T.gold, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: "bold", flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ color: T.textBright, fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>{w.locationName}</div>
+                <div style={{ color: T.textBright, fontSize: 16, fontWeight: "bold", marginBottom: 4 }}>{w.locationName}</div>
                 {w.isLoot ? (
-                  <div style={{ fontSize: 10, color: w.players[0]?.color, marginBottom: 2 }}>
+                  <div style={{ fontSize: 20, color: w.players[0]?.color, marginBottom: 2 }}>
                     {w.players[0]?.objective}
-                    <div style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{w.players[0]?.name}</div>
+                    <div style={{ fontSize: 17, color: T.textDim, marginTop: 2 }}>{w.players[0]?.name}</div>
                   </div>
                 ) : w.players.map((p, pi) => (
                   <div key={pi} style={{ display: "flex", gap: 6, alignItems: "flex-start", marginBottom: 3 }}>
                     <Badge label={p.name} color={p.color} small />
-                    <div style={{ fontSize: 10, color: p.color, flex: 1 }}>{p.objective}{p.total > 1 && p.progress < p.total && <span style={{ color: T.textDim }}> ({p.progress}/{p.total})</span>}</div>
+                    <div style={{ fontSize: 20, color: p.color, flex: 1 }}>{p.objective}{p.total > 1 && p.progress < p.total && <span style={{ color: T.textDim }}> ({p.progress}/{p.total})</span>}</div>
                   </div>
                 ))}
               </div>
@@ -1176,11 +1286,11 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           {/* Extract as final step */}
           {extractWaypoints.map((w) => (
             <div key={w.id} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <div style={{ background: "#0a1a0a", border: "1px solid #2a6a2a", color: "#5dba5d", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0 }}>⬆</div>
+              <div style={{ background: "#0a1a0a", border: "1px solid #2a6a2a", color: "#5dba5d", width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>⬆</div>
               <div style={{ flex: 1 }}>
-                <div style={{ color: "#5dba5d", fontSize: 11, fontWeight: "bold", marginBottom: 4 }}>EXTRACT — {w.extractName}</div>
+                <div style={{ color: "#5dba5d", fontSize: 16, fontWeight: "bold", marginBottom: 4 }}>EXTRACT — {w.extractName}</div>
                 {w.players.map((p, pi) => (
-                  <div key={pi} style={{ fontSize: 9, color: "#5dba5d", opacity: 0.8 }}>
+                  <div key={pi} style={{ fontSize: 17, color: "#5dba5d", opacity: 0.8 }}>
                     {p.name}{p.missingItems?.length > 0 && <span style={{ color: "#e05a5a" }}> ⚠ missing {p.missingItems.join(", ")}</span>}
                   </div>
                 ))}
@@ -1190,7 +1300,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           {/* Tarkov.dev link */}
           {apiMap && (
             <a href={`https://tarkov.dev/map/${apiMap.normalizedName}`} target="_blank" rel="noreferrer"
-              style={{ display: "block", background: "#0a1318", border: "1px solid #1a3a4a", color: "#4a8aba", padding: "9px 0", fontSize: 9, letterSpacing: 2, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center", marginTop: 10 }}>
+              style={{ display: "block", background: "#0a1318", border: "1px solid #1a3a4a", color: "#4a8aba", padding: "9px 0", fontSize: 17, letterSpacing: 2, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center", marginTop: 10 }}>
               🗺 OPEN FULL INTERACTIVE MAP ON TARKOV.DEV →
             </a>
           )}
@@ -1211,19 +1321,19 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
   return (
     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(7,9,11,0.97)", zIndex: 70, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 14px", flexShrink: 0 }}>
-        <div style={{ fontSize: 8, color: T.textDim, letterSpacing: 4, marginBottom: 4 }}>POST-RAID — MY PROGRESS</div>
-        <div style={{ fontSize: 13, color: T.textBright, fontWeight: "bold" }}>How did your raid go?</div>
-        <div style={{ fontSize: 10, color: T.textDim, marginTop: 3 }}>Only your objectives. Copy updated code after saving.</div>
+        <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 4, marginBottom: 4 }}>POST-RAID — MY PROGRESS</div>
+        <div style={{ fontSize: 20, color: T.textBright, fontWeight: "bold" }}>How did your raid go?</div>
+        <div style={{ fontSize: 20, color: T.textDim, marginTop: 3 }}>Only your objectives. Copy updated code after saving.</div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
         {trackable.length === 0 ? (
-          <div style={{ color: T.textDim, fontSize: 11, textAlign: "center", padding: 32, fontFamily: T.mono }}>No countable objectives this raid.</div>
+          <div style={{ color: T.textDim, fontSize: 16, textAlign: "center", padding: 32, fontFamily: T.mono }}>No countable objectives this raid.</div>
         ) : trackable.map((p, i) => {
           const k = key(p); const cur = updates[k]; const done = (myProfile.progress || {})[k] || 0; const remaining = Math.max(0, p.total - done);
           return (
             <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `3px solid ${p.color || T.gold}`, padding: 10, marginBottom: 8 }}>
-              <div style={{ fontSize: 11, color: T.textBright, fontWeight: "bold", marginBottom: 4 }}>{p.objective}</div>
-              <div style={{ fontSize: 9, color: T.textDim, marginBottom: 8 }}>Progress: {done}/{p.total} — need {remaining} more</div>
+              <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold", marginBottom: 4 }}>{p.objective}</div>
+              <div style={{ fontSize: 17, color: T.textDim, marginBottom: 8 }}>Progress: {done}/{p.total} — need {remaining} more</div>
               {p.total === 1 ? (
                 <div style={{ display: "flex", gap: 8 }}>
                   {["Done ✓", "Not done"].map((opt, oi) => (
@@ -1232,7 +1342,7 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: 8, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>COMPLETED THIS RAID:</div>
+                  <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>COMPLETED THIS RAID:</div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {Array.from({ length: Math.min(remaining + 1, 10) }, (_, n) => (
                       <button key={n} onClick={() => set(k, n)} style={{ width: 36, height: 36, background: cur === n ? (p.color || T.gold) + "22" : "transparent", border: `1px solid ${cur === n ? (p.color || T.gold) : T.border}`, color: cur === n ? (p.color || T.gold) : T.textDim, cursor: "pointer", fontFamily: T.mono, fontSize: 12 }}>{n}</button>
@@ -1245,8 +1355,8 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
         })}
       </div>
       <div style={{ padding: 12, display: "flex", gap: 8, borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
-        <button onClick={onClose} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "10px 0", fontSize: 9, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase" }}>Cancel</button>
-        <button onClick={() => { const newProg = { ...(myProfile.progress || {}) }; Object.entries(updates).forEach(([k, v]) => { newProg[k] = Math.min((newProg[k] || 0) + v, 9999); }); onSave(newProg); onClose(); }} style={{ flex: 2, background: "#5dba5d22", border: "1px solid #3a8a3a", color: "#5dba5d", padding: "10px 0", fontSize: 9, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase", fontWeight: "bold" }}>✓ SAVE MY PROGRESS</button>
+        <button onClick={onClose} style={{ flex: 1, background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "10px 0", fontSize: 20, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase" }}>Cancel</button>
+        <button onClick={() => { const newProg = { ...(myProfile.progress || {}) }; Object.entries(updates).forEach(([k, v]) => { newProg[k] = Math.min((newProg[k] || 0) + v, 9999); }); onSave(newProg); onClose(); }} style={{ flex: 2, background: "#5dba5d22", border: "1px solid #3a8a3a", color: "#5dba5d", padding: "10px 0", fontSize: 20, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase", fontWeight: "bold" }}>✓ SAVE MY PROGRESS</button>
       </div>
     </div>
   );
@@ -1255,11 +1365,16 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
 // ─── MY PROFILE TAB ──────────────────────────────────────────────────────
 function MyProfileTab({ myProfile, saveMyProfile, apiTasks, loading, apiError, apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget }) {
   const [screen, setScreen] = useState("profile");
+  const [profileSub, setProfileSub] = useState("profile"); // "profile" | "tasks" | "hideout"
   const [taskSearch, setTaskSearch] = useState("");
   const [taskTrader, setTaskTrader] = useState("all");
   const [taskMapFilter, setTaskMapFilter] = useState("all");
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
+  const [showRestore, setShowRestore] = useState(false);
+  const [restoreCode, setRestoreCode] = useState("");
+  const [restoreError, setRestoreError] = useState("");
+  const [hideoutPrereq, setHideoutPrereq] = useState(null);
 
   const copyCode = () => {
     const code = encodeProfile(myProfile); if (!code) return;
@@ -1292,8 +1407,8 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, loading, apiError, a
   if (screen === "browsetasks") return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
-        <button onClick={() => setScreen("profile")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 9, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 8 }}>← BACK</button>
-        <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." style={{ width: "100%", background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: 11, fontFamily: T.mono, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
+        <button onClick={() => setScreen("profile")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 17, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 8 }}>← BACK</button>
+        <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." style={{ width: "100%", background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: 16, fontFamily: T.mono, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
           <Btn ch="All" small active={taskTrader === "all"} onClick={() => setTaskTrader("all")} />
           {traders.slice(0, 8).map(tr => <Btn key={tr} ch={tr} small active={taskTrader === tr} onClick={() => setTaskTrader(tr)} />)}
@@ -1304,23 +1419,23 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, loading, apiError, a
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {loading && <div style={{ color: T.textDim, fontSize: 10, textAlign: "center", padding: 20 }}>Loading live data from tarkov.dev...</div>}
-        {apiError && <div style={{ color: "#e05a5a", fontSize: 10, textAlign: "center", padding: 20 }}>Could not reach tarkov.dev. Check connection.</div>}
-        <div style={{ fontSize: 9, color: T.textDim, letterSpacing: 2, marginBottom: 10 }}>{filteredTasks.length} TASKS · LIVE FROM TARKOV.DEV<Tip text="Filter by trader or map, then tap '+ ADD' on any task you need to complete. Added tasks appear on your profile and get shared with your squad via your share code." /></div>
+        {loading && <div style={{ color: T.textDim, fontSize: 20, textAlign: "center", padding: 20 }}>Loading live data from tarkov.dev...</div>}
+        {apiError && <div style={{ color: "#e05a5a", fontSize: 20, textAlign: "center", padding: 20 }}>Could not reach tarkov.dev. Check connection.</div>}
+        <div style={{ fontSize: 17, color: T.textDim, letterSpacing: 2, marginBottom: 10 }}>{filteredTasks.length} TASKS · LIVE FROM TARKOV.DEV<Tip text="Filter by trader or map, then tap '+ ADD' on any task you need to complete. Added tasks appear on your profile and get shared with your squad via your share code." /></div>
         {filteredTasks.map(task => {
           const added = myProfile.tasks?.some(t => t.taskId === task.id);
           return (
             <div key={task.id} style={{ background: T.surface, border: `1px solid ${added ? myProfile.color : T.border}`, borderLeft: `3px solid ${added ? myProfile.color : T.border}`, padding: 10, marginBottom: 6 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                <div style={{ color: T.textBright, fontSize: 11, fontWeight: "bold", flex: 1 }}>{task.name}</div>
-                <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? "#1a0a0a" : "transparent", border: `1px solid ${added ? "#6a2a2a" : T.borderBright}`, color: added ? "#e05a5a" : T.textDim, padding: "3px 8px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
+                <div style={{ color: T.textBright, fontSize: 16, fontWeight: "bold", flex: 1 }}>{task.name}</div>
+                <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? "#1a0a0a" : "transparent", border: `1px solid ${added ? "#6a2a2a" : T.borderBright}`, color: added ? "#e05a5a" : T.textDim, padding: "4px 8px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
               </div>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
                 <Badge label={task.trader?.name || "?"} color={T.textDim} />
                 {task.map && <Badge label={task.map.name} color="#5a7a8a" />}
                 {task.minPlayerLevel > 1 && <Badge label={`Lvl ${task.minPlayerLevel}+`} color={T.textDim} />}
               </div>
-              {task.objectives?.slice(0, 2).map(obj => <div key={obj.id} style={{ fontSize: 9, color: T.textDim, marginTop: 2 }}>{getObjMeta(obj).icon} {obj.description}</div>)}
+              {task.objectives?.slice(0, 2).map(obj => <div key={obj.id} style={{ fontSize: 17, color: T.textDim, marginTop: 2 }}>{getObjMeta(obj).icon} {obj.description}</div>)}
             </div>
           );
         })}
@@ -1329,92 +1444,253 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, loading, apiError, a
     </div>
   );
 
+  const subTabs = [
+    { id: "profile", label: "Profile", icon: "▲" },
+    { id: "tasks", label: `Tasks (${myProfile.tasks?.length || 0})`, icon: "★" },
+    { id: "hideout", label: "Hideout", icon: "◈" },
+  ];
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 14px" }}>
-        <SL c={<>YOUR PLAYER PROFILE<Tip step="STEP 1" text="Set your callsign and pick a color. This is how your squadmates will see you on the route map." /></>} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: myProfile.color + "33", border: `2px solid ${myProfile.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: myProfile.color, flexShrink: 0 }}>{myProfile.name?.[0]?.toUpperCase() || "?"}</div>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: myProfile.color + "33", border: `2px solid ${myProfile.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: myProfile.color, flexShrink: 0 }}>{myProfile.name?.[0]?.toUpperCase() || "?"}</div>
           {editingName ? (
-            <input autoFocus value={myProfile.name || ""} onChange={e => saveMyProfile({ ...myProfile, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={e => e.key === "Enter" && setEditingName(false)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${myProfile.color}`, color: myProfile.color, fontSize: 16, fontFamily: T.mono, outline: "none", padding: "2px 0" }} />
+            <input autoFocus value={myProfile.name || ""} onChange={e => saveMyProfile({ ...myProfile, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={e => e.key === "Enter" && setEditingName(false)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${myProfile.color}`, color: myProfile.color, fontSize: 20, fontFamily: T.mono, outline: "none", padding: "2px 0" }} />
           ) : (
-            <div style={{ flex: 1, color: myProfile.color, fontSize: 16, fontWeight: "bold", cursor: "pointer" }} onClick={() => setEditingName(true)}>
-              {myProfile.name || "Tap to set name"}<span style={{ fontSize: 8, color: T.textDim, fontWeight: "normal", marginLeft: 6 }}>✎</span>
+            <div style={{ flex: 1, color: myProfile.color, fontSize: 20, fontWeight: "bold", cursor: "pointer" }} onClick={() => setEditingName(true)}>
+              {myProfile.name || "Tap to set name"}<span style={{ fontSize: 16, color: T.textDim, fontWeight: "normal", marginLeft: 6 }}>✎</span>
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           {PLAYER_COLORS.map((col, i) => <button key={i} onClick={() => saveMyProfile({ ...myProfile, color: col })} style={{ width: 24, height: 24, borderRadius: "50%", background: col, cursor: "pointer", border: myProfile.color === col ? "2px solid #d8d0c0" : "2px solid transparent", padding: 0 }} />)}
         </div>
+        {/* Sub-tabs */}
+        <div style={{ display: "flex", gap: 4 }}>
+          {subTabs.map(st => (
+            <button key={st.id} onClick={() => setProfileSub(st.id)} style={{
+              flex: 1, padding: "8px 4px", fontSize: 16, letterSpacing: 1, fontFamily: T.mono, textTransform: "uppercase",
+              background: profileSub === st.id ? myProfile.color + "22" : "transparent",
+              border: `2px solid ${profileSub === st.id ? myProfile.color : T.border}`,
+              color: profileSub === st.id ? myProfile.color : T.textDim,
+              cursor: "pointer", fontWeight: profileSub === st.id ? "bold" : "normal",
+              transition: "background 0.15s, border-color 0.15s",
+            }}>{st.icon} {st.label}</button>
+          ))}
+        </div>
       </div>
+
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        <SL c={<>YOUR SHARE CODE<Tip step="STEP 3" text="Copy this code and paste it in Discord before each raid. Your squadmates paste it in their Squad tab to import your profile and tasks." /></>} />
-        <div style={{ background: T.surface, border: `1px solid ${myProfile.color}44`, borderLeft: `3px solid ${myProfile.color}`, padding: 12, marginBottom: 16 }}>
-          <div style={{ fontSize: 10, color: T.text, lineHeight: 1.7, marginBottom: 10 }}>Copy your code and paste it in Discord before each raid. Teammates import it in the Squad tab — no account needed.</div>
-          <div style={{ background: "#060809", border: `1px solid ${T.border}`, padding: "8px 10px", marginBottom: 8, fontSize: 8, color: T.textDim, fontFamily: T.mono, wordBreak: "break-all", lineHeight: 1.5 }}>{myProfile.tasks?.length > 0 ? encodeProfile(myProfile)?.slice(0, 60) + "..." : "Add tasks to generate your code"}</div>
-          <button onClick={copyCode} disabled={!myProfile.tasks?.length} style={{ width: "100%", background: copied ? "#0a1a0a" : myProfile.color + "22", border: `1px solid ${copied ? "#2a6a2a" : myProfile.color}`, color: copied ? "#5dba5d" : myProfile.color, padding: "10px 0", fontSize: 9, cursor: myProfile.tasks?.length ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase", fontWeight: "bold" }}>
-            {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY MY CODE"}
-          </button>
-          {!myProfile.tasks?.length && <div style={{ fontSize: 8, color: T.textDim, textAlign: "center", marginTop: 6 }}>Add tasks below first</div>}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-          <SL c={<>MY TASKS ({myProfile.tasks?.length || 0})<Tip step="STEP 2" text="Browse and add the tasks you're currently working on. These get included in your share code so your squad knows what objectives you need to hit." /></>} s={{ marginBottom: 0 }} />
-          <button onClick={() => setScreen("browsetasks")} style={{ background: myProfile.color + "22", border: `1px solid ${myProfile.color}`, color: myProfile.color, padding: "5px 10px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>+ BROWSE TASKS</button>
-        </div>
-        {!myProfile.tasks?.length && (
-          <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 20, textAlign: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 11, color: T.textDim, marginBottom: 8 }}>No tasks added yet</div>
-            <button onClick={() => setScreen("browsetasks")} style={{ background: "transparent", border: `1px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: 9, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2 }}>BROWSE ALL TASKS →</button>
-          </div>
+        {/* ── PROFILE SUB-TAB ── */}
+        {profileSub === "profile" && (
+          <>
+            <SL c={<>YOUR SHARE CODE<Tip text="Copy this code and paste it in Discord before each raid. Your squadmates paste it in their Squad tab to import your profile and tasks." /></>} />
+            <div style={{ background: T.surface, border: `1px solid ${myProfile.color}44`, borderLeft: `3px solid ${myProfile.color}`, padding: 12, marginBottom: 16 }}>
+              <div style={{ fontSize: 16, color: T.text, lineHeight: 1.7, marginBottom: 10 }}>Copy your code and paste it in Discord before each raid. Teammates import it in the Squad tab — no account needed.</div>
+              <div style={{ background: "#060809", border: `1px solid ${T.border}`, padding: "8px 10px", marginBottom: 8, fontSize: 16, color: T.textDim, fontFamily: T.mono, wordBreak: "break-all", lineHeight: 1.5 }}>{myProfile.tasks?.length > 0 ? encodeProfile(myProfile)?.slice(0, 60) + "..." : "Add tasks to generate your code"}</div>
+              <button onClick={copyCode} disabled={!myProfile.tasks?.length} style={{ width: "100%", background: copied ? "#0a1a0a" : myProfile.color + "22", border: `2px solid ${copied ? "#2a6a2a" : myProfile.color}`, color: copied ? "#5dba5d" : myProfile.color, padding: "10px 0", fontSize: 16, cursor: myProfile.tasks?.length ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase", fontWeight: "bold" }}>
+                {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY MY CODE"}
+              </button>
+              {!myProfile.tasks?.length && <div style={{ fontSize: 16, color: T.textDim, textAlign: "center", marginTop: 6 }}>Add tasks in the Tasks tab first</div>}
+              <button onClick={() => setShowRestore(!showRestore)} style={{ width: "100%", background: showRestore ? "#0a1a0a" : "#0a1520", border: `2px solid ${showRestore ? "#2a6a2a" : "#2a4a6a"}`, color: showRestore ? "#5dba5d" : "#5a9aba", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2, marginTop: 8, padding: "8px 0", textTransform: "uppercase" }}>{showRestore ? "▾ HIDE RESTORE" : "▸ RESTORE PROFILE FROM CODE"}</button>
+              {showRestore && (
+                <div style={{ background: "#0a0d10", border: `1px solid ${T.border}`, padding: 10, marginTop: 4 }}>
+                  <div style={{ fontSize: 16, color: T.textDim, lineHeight: 1.5, marginBottom: 8 }}>Paste a share code to restore your profile on this device — name, color, tasks, and progress will all transfer.</div>
+                  <textarea value={restoreCode} onChange={e => setRestoreCode(e.target.value)} placeholder="Paste your TG2:... code here"
+                    style={{ width: "100%", background: "#060809", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: 16, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 6 }} />
+                  {restoreError && <div style={{ fontSize: 16, color: "#e05a5a", marginBottom: 6 }}>{restoreError}</div>}
+                  <button onClick={() => {
+                    setRestoreError("");
+                    const decoded = decodeProfile(restoreCode.trim());
+                    if (!decoded) { setRestoreError("Invalid code — check for typos."); return; }
+                    saveMyProfile({ ...myProfile, name: decoded.name, color: decoded.color, tasks: decoded.tasks, progress: decoded.progress });
+                    setRestoreCode(""); setShowRestore(false);
+                  }} disabled={!restoreCode.trim()} style={{ width: "100%", background: restoreCode.trim() ? "#0a1a0a" : "transparent", border: `2px solid ${restoreCode.trim() ? "#2a6a2a" : T.border}`, color: restoreCode.trim() ? "#5dba5d" : T.textDim, padding: "10px 0", fontSize: 16, cursor: restoreCode.trim() ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2 }}>RESTORE MY PROFILE</button>
+                </div>
+              )}
+            </div>
+          </>
         )}
-        {(myProfile.tasks || []).map(t => {
-          const apiTask = apiTasks?.find(x => x.id === t.taskId); if (!apiTask) return null;
-          const prog = myProfile.progress || {};
-          const completedObjs = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${t.taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
-          const totalObjs = (apiTask.objectives || []).filter(o => !o.optional).length;
-          const isComplete = completedObjs >= totalObjs && totalObjs > 0;
-          return (
-            <div key={t.taskId} style={{ background: isComplete ? "#0a140a" : T.surface, border: `1px solid ${isComplete ? "#2a5a2a" : T.border}`, borderLeft: `3px solid ${isComplete ? "#4a9a4a" : myProfile.color}`, padding: 10, marginBottom: 6 }}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: isComplete ? "#4a8a4a" : T.textBright, fontSize: 11, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none" }}>{apiTask.name}</div>
-                  <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-                    <Badge label={apiTask.trader?.name || "?"} color={T.textDim} />
-                    {apiTask.map && <Badge label={apiTask.map.name} color="#5a7a8a" />}
-                    <span style={{ fontSize: 8, color: isComplete ? "#4a7a4a" : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
+
+        {/* ── TASKS SUB-TAB ── */}
+        {profileSub === "tasks" && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <SL c={<>MY TASKS ({myProfile.tasks?.length || 0})<Tip text="Browse and add the tasks you're currently working on. These get included in your share code so your squad knows what objectives you need to hit." /></>} s={{ marginBottom: 0 }} />
+              <button onClick={() => setScreen("browsetasks")} style={{ background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "6px 12px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>+ BROWSE TASKS</button>
+            </div>
+            {!myProfile.tasks?.length && (
+              <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 20, textAlign: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 16, color: T.textDim, marginBottom: 8 }}>No tasks added yet</div>
+                <button onClick={() => setScreen("browsetasks")} style={{ background: "transparent", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2 }}>BROWSE ALL TASKS →</button>
+              </div>
+            )}
+            {(myProfile.tasks || []).map(t => {
+              const apiTask = apiTasks?.find(x => x.id === t.taskId); if (!apiTask) return null;
+              const prog = myProfile.progress || {};
+              const completedObjs = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${t.taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
+              const totalObjs = (apiTask.objectives || []).filter(o => !o.optional).length;
+              const isComplete = completedObjs >= totalObjs && totalObjs > 0;
+              return (
+                <div key={t.taskId} style={{ background: isComplete ? "#0a140a" : T.surface, border: `1px solid ${isComplete ? "#2a5a2a" : T.border}`, borderLeft: `3px solid ${isComplete ? "#4a9a4a" : myProfile.color}`, padding: 10, marginBottom: 6 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: isComplete ? "#4a8a4a" : T.textBright, fontSize: 16, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none" }}>{apiTask.name}</div>
+                      <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                        <Badge label={apiTask.trader?.name || "?"} color={T.textDim} />
+                        {apiTask.map && <Badge label={apiTask.map.name} color="#5a7a8a" />}
+                        <span style={{ fontSize: 16, color: isComplete ? "#4a7a4a" : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
+                      </div>
+                    </div>
+                    <button onClick={() => removeTask(t.taskId)} style={{ background: "transparent", border: "none", color: "#9a3a3a", cursor: "pointer", fontSize: 20, padding: "0 4px", flexShrink: 0 }}>×</button>
                   </div>
                 </div>
-                <button onClick={() => removeTask(t.taskId)} style={{ background: "transparent", border: "none", color: "#9a3a3a", cursor: "pointer", fontSize: 14, padding: "0 2px", flexShrink: 0 }}>×</button>
-              </div>
-            </div>
-          );
-        })}
+              );
+            })}
+          </>
+        )}
 
-        {/* Hideout section */}
-        <div style={{ marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <SL c={<>MY HIDEOUT<Tip text="Track your hideout upgrade levels and set a target. The Squad tab will recommend maps based on what items you need to find." /></>} s={{ marginBottom: 0 }} />
-            <button onClick={() => setScreen("hideout")} style={{ background: "#4ababa22", border: "1px solid #4ababa", color: "#4ababa", padding: "5px 10px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>MANAGE HIDEOUT</button>
-          </div>
-          {hideoutTarget && apiHideout ? (() => {
-            const station = apiHideout.find(s => s.id === hideoutTarget.stationId);
-            const level = station?.levels.find(l => l.level === hideoutTarget.level);
-            return station && level ? (
-              <div style={{ background: "#0a1518", border: "1px solid #1a3a3a", borderLeft: "3px solid #4ababa", padding: 10 }}>
-                <div style={{ fontSize: 9, color: "#4ababa", fontWeight: "bold", marginBottom: 4 }}>Target: {station.name} → Level {hideoutTarget.level}</div>
-                <div style={{ fontSize: 9, color: T.textDim }}>
-                  {level.itemRequirements.filter(r => r.item.name !== "Roubles").slice(0, 3).map(r => `${r.item.shortName || r.item.name} ×${r.count}`).join(", ")}
-                  {level.itemRequirements.filter(r => r.item.name !== "Roubles").length > 3 ? " ..." : ""}
+        {/* ── HIDEOUT SUB-TAB ── */}
+        {profileSub === "hideout" && (
+          <>
+            {/* Target display */}
+            {hideoutTarget && apiHideout ? (() => {
+              const station = apiHideout.find(s => s.id === hideoutTarget.stationId);
+              const level = station?.levels.find(l => l.level === hideoutTarget.level);
+              return station && level ? (
+                <div style={{ background: "#0a1518", border: "1px solid #1a3a3a", borderLeft: "3px solid #4ababa", padding: 12, marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontSize: 16, letterSpacing: 3, color: "#4ababa", marginBottom: 2 }}>★ CURRENT TARGET</div>
+                      <div style={{ fontSize: 17, color: T.textBright, fontWeight: "bold" }}>{station.name} → Level {hideoutTarget.level}</div>
+                    </div>
+                    <button onClick={() => saveHideoutTarget(null)} style={{ background: "transparent", border: "2px solid #4a2a2a", color: "#e05a5a", padding: "4px 10px", fontSize: 16, cursor: "pointer", fontFamily: T.mono }}>CLEAR</button>
+                  </div>
+                  <div style={{ fontSize: 16, letterSpacing: 2, color: T.textDim, marginBottom: 6 }}>ITEMS NEEDED:</div>
+                  {level.itemRequirements.map((req, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderBottom: `1px solid ${T.border}` }}>
+                      <span style={{ fontSize: 16, color: T.text }}>{req.item.name}</span>
+                      <Badge label={`×${req.count}`} color="#4ababa" small />
+                    </div>
+                  ))}
+                  {level.traderRequirements?.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      {level.traderRequirements.map((req, i) => (
+                        <div key={i} style={{ fontSize: 16, color: "#ba9a4a", marginTop: 2 }}>Requires {req.trader.name} LL{req.level}</div>
+                      ))}
+                    </div>
+                  )}
+                  {level.stationLevelRequirements?.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      {level.stationLevelRequirements.map((req, i) => {
+                        const met = (hideoutLevels[req.station.id] || 0) >= req.level;
+                        return <div key={i} style={{ fontSize: 16, color: met ? "#5dba5d" : "#e05a5a", marginTop: 2 }}>{met ? "✓" : "✕"} {req.station.name} Level {req.level}</div>;
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : null;
+            })() : (
+              <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 16, textAlign: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 16, color: T.textDim }}>No hideout target set — pick one below.</div>
+              </div>
+            )}
+
+            {/* Prereq prompt — inline */}
+            {hideoutPrereq && (
+              <div style={{ background: "#1a1408", border: "1px solid #5a4a1a", borderLeft: "3px solid #ba8a4a", padding: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 16, letterSpacing: 3, color: "#ba8a4a", marginBottom: 6 }}>PREREQUISITES NEEDED</div>
+                <div style={{ fontSize: 16, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>
+                  <span style={{ color: T.textBright, fontWeight: "bold" }}>{hideoutPrereq.stationName} Level {hideoutPrereq.level}</span> requires upgrades you don't have yet. Target a prerequisite first?
+                </div>
+                {hideoutPrereq.unmet.map((req, i) => {
+                  const prereqStation = apiHideout?.find(s => s.id === req.stationId);
+                  const prereqItems = prereqStation?.levels.find(l => l.level === req.level)?.itemRequirements?.filter(r => r.item.name !== "Roubles") || [];
+                  return (
+                    <button key={i} onClick={() => { saveHideoutTarget({ stationId: req.stationId, level: req.level }); setHideoutPrereq(null); }}
+                      style={{ width: "100%", background: "#0a1518", border: "2px solid #2a4a4a", padding: "10px 12px", marginBottom: 4, cursor: "pointer", textAlign: "left" }}>
+                      <div style={{ fontSize: 16, color: "#4ababa", fontWeight: "bold" }}>{req.stationName} → Level {req.level}</div>
+                      {prereqItems.length > 0 && <div style={{ fontSize: 16, color: T.textDim, marginTop: 2 }}>{prereqItems.slice(0, 4).map(r => `${r.item.shortName || r.item.name} ×${r.count}`).join(", ")}{prereqItems.length > 4 ? " ..." : ""}</div>}
+                    </button>
+                  );
+                })}
+                <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                  <button onClick={() => { saveHideoutTarget({ stationId: hideoutPrereq.stationId, level: hideoutPrereq.level }); setHideoutPrereq(null); }}
+                    style={{ flex: 1, background: "transparent", border: `2px solid ${T.border}`, color: T.textDim, padding: "8px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>TARGET ANYWAY</button>
+                  <button onClick={() => setHideoutPrereq(null)}
+                    style={{ flex: 1, background: "transparent", border: `2px solid ${T.border}`, color: T.textDim, padding: "8px 0", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>CANCEL</button>
                 </div>
               </div>
-            ) : null;
-          })() : (
-            <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: "14px 10px", textAlign: "center" }}>
-              <div style={{ fontSize: 10, color: T.textDim, marginBottom: 4 }}>No hideout target set</div>
-              <button onClick={() => setScreen("hideout")} style={{ background: "transparent", border: "1px solid #4ababa", color: "#4ababa", padding: "6px 14px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>SET HIDEOUT TARGET →</button>
-            </div>
-          )}
-        </div>
+            )}
+
+            {/* Station grid — inline */}
+            <SL c={<>ALL STATIONS<Tip text="Tap the number buttons to set your current level for each station. Then tap a TARGET button to mark the upgrade you're saving items for." /></>} />
+            {apiHideout ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {apiHideout.filter(s => s.levels.length > 0).sort((a, b) => a.name.localeCompare(b.name)).map(station => {
+                  const curLevel = hideoutLevels[station.id] || 0;
+                  const maxLevel = Math.max(...station.levels.map(l => l.level));
+                  const isTarget = hideoutTarget?.stationId === station.id;
+                  return (
+                    <div key={station.id} style={{
+                      background: isTarget ? "#0a1518" : T.surface,
+                      border: `1px solid ${isTarget ? "#4ababa44" : T.border}`,
+                      borderLeft: `3px solid ${curLevel >= maxLevel ? "#3a8a3a" : (isTarget ? "#4ababa" : T.borderBright)}`,
+                      padding: "10px 12px",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                        <div style={{ fontSize: 16, color: curLevel >= maxLevel ? "#5dba5d" : T.textBright, fontWeight: "bold" }}>
+                          {station.name}
+                          {curLevel >= maxLevel && <span style={{ fontSize: 16, color: "#3a8a3a", marginLeft: 5 }}>MAX</span>}
+                        </div>
+                        <div style={{ fontSize: 16, color: T.textDim }}>Lv {curLevel}/{maxLevel}</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
+                        {Array.from({ length: maxLevel + 1 }, (_, i) => (
+                          <button key={i} onClick={() => saveHideoutLevels({ ...hideoutLevels, [station.id]: i })}
+                            style={{
+                              width: 32, height: 28, fontSize: 16, fontFamily: T.mono,
+                              background: curLevel === i ? T.gold + "22" : "transparent",
+                              border: `2px solid ${curLevel === i ? T.gold : T.border}`,
+                              color: curLevel === i ? T.gold : (i <= curLevel ? "#5dba5d" : T.textDim),
+                              cursor: "pointer",
+                            }}>{i}</button>
+                        ))}
+                      </div>
+                      {curLevel < maxLevel && (
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                          {station.levels.filter(l => l.level > curLevel).map(l => {
+                            const isThisTarget = isTarget && hideoutTarget.level === l.level;
+                            const canBuildIt = (l.stationLevelRequirements || []).every(req => (hideoutLevels[req.station.id] || 0) >= req.level);
+                            return (
+                              <button key={l.level}
+                                onClick={() => {
+                                  if (isThisTarget) { saveHideoutTarget(null); return; }
+                                  const unmet = (l.stationLevelRequirements || []).filter(req => (hideoutLevels[req.station.id] || 0) < req.level).map(req => ({ stationId: req.station.id, stationName: req.station.name, level: req.level }));
+                                  if (unmet.length > 0) { setHideoutPrereq({ stationName: station.name, stationId: station.id, level: l.level, unmet }); }
+                                  else { saveHideoutTarget({ stationId: station.id, level: l.level }); }
+                                }}
+                                style={{
+                                  background: isThisTarget ? "#4ababa22" : "transparent",
+                                  border: `2px solid ${isThisTarget ? "#4ababa" : "#1a2a2a"}`,
+                                  color: isThisTarget ? "#4ababa" : (canBuildIt ? T.textDim : "#5a3a3a"),
+                                  padding: "4px 10px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1,
+                                }}
+                              >{isThisTarget ? "★ " : ""}TARGET L{l.level}{!canBuildIt ? " (prereq)" : ""}</button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{ color: T.textDim, fontSize: 16, textAlign: "center", padding: 20 }}>Loading hideout data...</div>
+            )}
+          </>
+        )}
 
         <div style={{ height: 20 }} />
       </div>
@@ -1437,9 +1713,16 @@ function useSquadRoom(myProfile) {
   const [members, setMembers] = useState([]);
   const [status, setStatus] = useState("idle"); // idle | creating | joining | connected | error
   const [error, setError] = useState(null);
+  const [leaderId, setLeaderId] = useState(null); // device_id of leader, null = no leader
+  const [sharedRoute, setSharedRoute] = useState(null); // route broadcast from leader
+  const [sharedRouteConfig, setSharedRouteConfig] = useState(null); // {mapId, faction, routeMode, ...}
   const subRef = useRef(null);
+  const roomSubRef = useRef(null);
 
-  // Push profile to room whenever it changes
+  const isLeader = leaderId === deviceId;
+  const hasLeader = leaderId !== null;
+
+  // Push profile + preferences to room whenever they change
   useEffect(() => {
     if (!supabase || !roomId || !myProfile?.name) return;
     const profileData = { name: myProfile.name, color: myProfile.color, tasks: myProfile.tasks || [], progress: myProfile.progress || {} };
@@ -1449,25 +1732,43 @@ function useSquadRoom(myProfile) {
     ).then(({ error: e }) => { if (e) console.warn("[TG] Room profile sync failed:", e); });
   }, [roomId, myProfile?.name, myProfile?.color, myProfile?.tasks?.length, myProfile?.progress]);
 
-  // Subscribe to room members
+  // Push preferences (extract vote, ready state) separately so they don't conflict with profile syncs
+  const updatePreferences = useCallback(async (prefs) => {
+    if (!supabase || !roomId) return;
+    // Merge with existing preferences
+    const { data: current } = await supabase.from("squad_members").select("preferences").eq("room_id", roomId).eq("device_id", deviceId).single();
+    const merged = { ...(current?.preferences || {}), ...prefs };
+    await supabase.from("squad_members").update({ preferences: merged }).eq("room_id", roomId).eq("device_id", deviceId);
+  }, [roomId, deviceId]);
+
+  // Subscribe to room members AND room changes (for leader/route)
   const subscribeToRoom = useCallback((rid) => {
     if (!supabase) return;
-    // Clean up previous subscription
     if (subRef.current) { supabase.removeChannel(subRef.current); subRef.current = null; }
+    if (roomSubRef.current) { supabase.removeChannel(roomSubRef.current); roomSubRef.current = null; }
 
-    // Initial fetch
+    // Initial fetch — members
     supabase.from("squad_members").select("*").eq("room_id", rid).then(({ data }) => {
       if (data) setMembers(data.filter(m => m.device_id !== deviceId));
     });
 
-    // Realtime subscription
-    const channel = supabase.channel(`room-${rid}`)
+    // Initial fetch — room (leader, route)
+    supabase.from("squad_rooms").select("leader_id, route, route_config").eq("id", rid).single().then(({ data }) => {
+      if (data) {
+        setLeaderId(data.leader_id || null);
+        setSharedRoute(data.route || null);
+        setSharedRouteConfig(data.route_config || null);
+      }
+    });
+
+    // Realtime: members
+    const memberChannel = supabase.channel(`room-members-${rid}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "squad_members", filter: `room_id=eq.${rid}` }, (payload) => {
         if (payload.eventType === "DELETE") {
           setMembers(prev => prev.filter(m => m.id !== payload.old.id));
         } else {
           const row = payload.new;
-          if (row.device_id === deviceId) return; // skip self
+          if (row.device_id === deviceId) return;
           setMembers(prev => {
             const exists = prev.findIndex(m => m.id === row.id);
             if (exists >= 0) { const next = [...prev]; next[exists] = row; return next; }
@@ -1476,7 +1777,18 @@ function useSquadRoom(myProfile) {
         }
       })
       .subscribe();
-    subRef.current = channel;
+    subRef.current = memberChannel;
+
+    // Realtime: room (leader changes, route broadcasts)
+    const roomChannel = supabase.channel(`room-state-${rid}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "squad_rooms", filter: `id=eq.${rid}` }, (payload) => {
+        const row = payload.new;
+        setLeaderId(row.leader_id || null);
+        setSharedRoute(row.route || null);
+        setSharedRouteConfig(row.route_config || null);
+      })
+      .subscribe();
+    roomSubRef.current = roomChannel;
   }, [deviceId]);
 
   const createRoom = useCallback(async () => {
@@ -1495,24 +1807,51 @@ function useSquadRoom(myProfile) {
     if (!supabase) { setError("Supabase not configured"); return; }
     setStatus("joining"); setError(null);
     try {
-      const { data, error: e } = await supabase.from("squad_rooms").select("id, code").eq("code", code.trim().toUpperCase()).single();
+      const { data, error: e } = await supabase.from("squad_rooms").select("id, code, leader_id, route, route_config").eq("code", code.trim().toUpperCase()).single();
       if (e || !data) throw new Error("Room not found — check the code and try again.");
       setRoomId(data.id); setRoomCode(data.code); setStatus("connected");
+      setLeaderId(data.leader_id || null);
+      setSharedRoute(data.route || null);
+      setSharedRouteConfig(data.route_config || null);
       subscribeToRoom(data.id);
     } catch (e) { setError(e.message); setStatus("error"); }
   }, [subscribeToRoom]);
 
   const leaveRoom = useCallback(async () => {
     if (subRef.current && supabase) { supabase.removeChannel(subRef.current); subRef.current = null; }
+    if (roomSubRef.current && supabase) { supabase.removeChannel(roomSubRef.current); roomSubRef.current = null; }
     if (supabase && roomId) {
+      // If leaving leader, clear leader
+      if (isLeader) await supabase.from("squad_rooms").update({ leader_id: null, route: null, route_config: null }).eq("id", roomId);
       await supabase.from("squad_members").delete().eq("room_id", roomId).eq("device_id", deviceId);
     }
     setRoomId(null); setRoomCode(null); setMembers([]); setStatus("idle"); setError(null);
+    setLeaderId(null); setSharedRoute(null); setSharedRouteConfig(null);
+  }, [roomId, deviceId, isLeader]);
+
+  // Claim / release leadership
+  const claimLeader = useCallback(async () => {
+    if (!supabase || !roomId) return;
+    await supabase.from("squad_rooms").update({ leader_id: deviceId, route: null, route_config: null }).eq("id", roomId);
   }, [roomId, deviceId]);
+
+  const releaseLeader = useCallback(async () => {
+    if (!supabase || !roomId) return;
+    await supabase.from("squad_rooms").update({ leader_id: null, route: null, route_config: null }).eq("id", roomId);
+  }, [roomId]);
+
+  // Broadcast route (leader only)
+  const broadcastRoute = useCallback(async (route, config) => {
+    if (!supabase || !roomId || !isLeader) return;
+    await supabase.from("squad_rooms").update({ route, route_config: config }).eq("id", roomId);
+  }, [roomId, isLeader]);
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => { if (subRef.current && supabase) supabase.removeChannel(subRef.current); };
+    return () => {
+      if (subRef.current && supabase) supabase.removeChannel(subRef.current);
+      if (roomSubRef.current && supabase) supabase.removeChannel(roomSubRef.current);
+    };
   }, []);
 
   // Convert members to squad profiles format
@@ -1525,9 +1864,21 @@ function useSquadRoom(myProfile) {
     imported: true,
     importedAt: new Date(m.updated_at).getTime(),
     isRoomMember: true,
+    deviceId: m.device_id,
+    preferences: m.preferences || {},
   }));
 
-  return { roomId, roomCode, roomSquad, status, error, createRoom, joinRoom, leaveRoom };
+  return {
+    roomId, roomCode, roomSquad, status, error,
+    createRoom, joinRoom, leaveRoom,
+    // Leader
+    leaderId, isLeader, hasLeader, claimLeader, releaseLeader,
+    // Route broadcast
+    sharedRoute, sharedRouteConfig, broadcastRoute,
+    // Preferences
+    updatePreferences,
+    deviceId,
+  };
 }
 
 // ─── SQUAD TAB ────────────────────────────────────────────────────────────
@@ -1552,6 +1903,10 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   const [equipSearch, setEquipSearch] = useState("");
   const [equipResults, setEquipResults] = useState(null);
   const [equipSearching, setEquipSearching] = useState(false);
+  const [tasksPerPerson, setTasksPerPerson] = useState(1);
+  const [plannerView, setPlannerView] = useState("quick"); // "quick" or "full"
+  const [squadExpanded, setSquadExpanded] = useState(false);
+  const [quickGenPending, setQuickGenPending] = useState(false);
 
   const searchEquipment = async (term) => {
     if (!term || term.length < 2) { setEquipResults(null); return; }
@@ -1627,6 +1982,18 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
 
   const toggleActive = id => setActiveIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  // When leader broadcasts a route and we're not the leader, show it
+  useEffect(() => {
+    if (room.status !== "connected" || room.isLeader) return;
+    if (room.sharedRoute && room.sharedRouteConfig) {
+      setRoute(room.sharedRoute);
+      if (room.sharedRouteConfig.mapId) setSelectedMapId(room.sharedRouteConfig.mapId);
+      if (room.sharedRouteConfig.faction) setFaction(room.sharedRouteConfig.faction);
+      if (room.sharedRouteConfig.routeMode) setRouteMode(room.sharedRouteConfig.routeMode);
+      setScreen("route");
+    }
+  }, [room.sharedRoute, room.sharedRouteConfig, room.status, room.isLeader]);
+
   const generateRoute = useCallback(() => {
     if (!selectedMap || !emap || !activeIds.size) return;
 
@@ -1649,29 +2016,32 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
       });
     } else {
       // Task mode: existing behavior
-      const bounds = selectedMap.coordinateSpace || null;
+      const bounds = MAP_BOUNDS[selectedMapNorm] || null;
       const wpMap = new Map();
 
       activeIds.forEach(pid => {
         const profile = allProfiles.find(p => p.id === pid); if (!profile) return;
-        const ptaskId = priorityTasks[pid]; if (!ptaskId) return;
-        const apiTask = apiTasks?.find(t => t.id === ptaskId); if (!apiTask) return;
+        const ptaskIds = priorityTasks[pid] || []; if (!ptaskIds.length) return;
 
-        (apiTask.objectives || []).filter(obj => !obj.optional).forEach(obj => {
-          const progressKey = `${pid}-${ptaskId}-${obj.id}`;
-          const objProgress = (profile.progress || {})[progressKey] || 0;
-          const meta = getObjMeta(obj);
-          if (objProgress >= meta.total) return;
-          const zonePos = obj.zones?.[0]?.position || obj.possibleLocations?.[0]?.positions?.[0] || null;
-          const pct = worldToPct(zonePos, bounds);
-          const entry = { playerId: pid, name: profile.name, color: profile.color, taskId: ptaskId, objId: obj.id, objective: meta.summary, isCountable: meta.isCountable, total: meta.total, progress: objProgress };
-          if (pct) {
-            const gk = `${Math.round(pct.x * 20)}_${Math.round(pct.y * 20)}`;
-            if (wpMap.has(gk)) wpMap.get(gk).players.push(entry);
-            else wpMap.set(gk, { id: `wp_${gk}`, pct, locationName: obj.description?.split(",")[0] || "Location", players: [entry] });
-          } else {
-            unpositioned.push({ id: `unpos_${pid}_${obj.id}`, pct: null, locationName: apiTask.name, players: [entry] });
-          }
+        ptaskIds.forEach(ptaskId => {
+          const apiTask = apiTasks?.find(t => t.id === ptaskId); if (!apiTask) return;
+
+          (apiTask.objectives || []).filter(obj => !obj.optional).forEach(obj => {
+            const progressKey = `${pid}-${ptaskId}-${obj.id}`;
+            const objProgress = (profile.progress || {})[progressKey] || 0;
+            const meta = getObjMeta(obj);
+            if (objProgress >= meta.total) return;
+            const zonePos = obj.zones?.[0]?.position || obj.possibleLocations?.[0]?.positions?.[0] || null;
+            const pct = worldToPct(zonePos, bounds);
+            const entry = { playerId: pid, name: profile.name, color: profile.color, taskId: ptaskId, objId: obj.id, objective: meta.summary, isCountable: meta.isCountable, total: meta.total, progress: objProgress };
+            if (pct) {
+              const gk = `${Math.round(pct.x * 20)}_${Math.round(pct.y * 20)}`;
+              if (wpMap.has(gk)) wpMap.get(gk).players.push(entry);
+              else wpMap.set(gk, { id: `wp_${gk}`, pct, locationName: obj.description?.split(",")[0] || "Location", players: [entry] });
+            } else {
+              unpositioned.push({ id: `unpos_${pid}_${obj.id}`, pct: null, locationName: apiTask.name, players: [entry] });
+            }
+          });
         });
       });
 
@@ -1712,10 +2082,16 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
     });
     const extractWaypoints = [...extractWpMap.values()];
 
-    setRoute([...orderedObjectives, ...unpositioned, ...extractWaypoints]);
+    const finalRoute = [...orderedObjectives, ...unpositioned, ...extractWaypoints];
+    setRoute(finalRoute);
     setConflicts(newConflicts.filter(c => !resolvedConflicts[c.id]));
     setScreen("route");
-  }, [selectedMap, emap, activeIds, allProfiles, priorityTasks, apiTasks, extractChoices, resolvedConflicts, routeMode, lootSubMode, targetEquipment, hideoutTarget, apiHideout]);
+
+    // If leader, broadcast route to room
+    if (room.isLeader && room.roomId) {
+      room.broadcastRoute(finalRoute, { mapId: selectedMapId, faction, routeMode, lootSubMode });
+    }
+  }, [selectedMap, emap, activeIds, allProfiles, priorityTasks, apiTasks, extractChoices, resolvedConflicts, routeMode, lootSubMode, targetEquipment, hideoutTarget, apiHideout, room.isLeader, room.roomId]);
 
   const handleConflictResolve = (id, choice) => {
     setResolvedConflicts(r => ({ ...r, [id]: choice }));
@@ -1725,22 +2101,30 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
 
   const handleSaveMyProgress = newProgress => saveMyProfile({ ...myProfile, progress: newProgress });
 
-  const canGenerate = selectedMap && activeIds.size > 0 && (routeMode === "loot" || [...activeIds].some(id => priorityTasks[id]));
+  const canGenerate = selectedMap && activeIds.size > 0 && (routeMode === "loot" || [...activeIds].some(id => (priorityTasks[id] || []).length > 0));
+
+  // Deferred route generation for Quick Start GO button
+  useEffect(() => {
+    if (quickGenPending && selectedMap && emap && activeIds.size > 0) {
+      generateRoute();
+      setQuickGenPending(false);
+    }
+  }, [quickGenPending, selectedMap, emap, activeIds, generateRoute]);
 
   // Route screen — breaks out of the 480px container to use full width
   if (screen === "route" || screen === "postraid") return (
     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: T.bg, zIndex: 50, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px", flexShrink: 0 }}>
-        <button onClick={() => setScreen("squad")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 9, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 6 }}>← BACK TO PLANNER</button>
+        <button onClick={() => setScreen("squad")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: 17, letterSpacing: 2, cursor: "pointer", fontFamily: T.mono, padding: 0, marginBottom: 6 }}>← BACK TO PLANNER</button>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 13, color: T.gold, fontWeight: "bold" }}>{selectedMap?.name} — {routeMode === "loot" ? (lootSubMode === "hideout" ? "Hideout Run" : lootSubMode === "equipment" ? "Equipment Run" : "Loot Run") : "Squad Route"}</div>
+          <div style={{ fontSize: 20, color: T.gold, fontWeight: "bold" }}>{selectedMap?.name} — {routeMode === "loot" ? (lootSubMode === "hideout" ? "Hideout Run" : lootSubMode === "equipment" ? "Equipment Run" : "Loot Run") : "Squad Route"}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Tip text="After your raid, tap POST-RAID to log kills and items found. This updates your progress so your next share code reflects what's done." />
-            <button onClick={() => setScreen("postraid")} style={{ background: "#5dba5d22", border: "1px solid #3a8a3a", color: "#5dba5d", padding: "5px 10px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>POST-RAID ▶</button>
+            <button onClick={() => setScreen("postraid")} style={{ background: "#5dba5d22", border: "1px solid #3a8a3a", color: "#5dba5d", padding: "6px 12px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>POST-RAID ▶</button>
           </div>
         </div>
         <div style={{ display: "flex", gap: 5, marginTop: 7, flexWrap: "wrap" }}>
-          {[...activeIds].map(pid => { const p = allProfiles.find(x => x.id === pid); const task = apiTasks?.find(t => t.id === priorityTasks[pid]); const ec = extractChoices[pid]; return p ? <div key={pid} style={{ background: p.color + "15", border: `1px solid ${p.color}44`, padding: "2px 7px", fontSize: 8, fontFamily: T.mono, color: p.color }}>{p.name}{task ? ` — ${task.name.slice(0, 14)}…` : ""}{ec?.extract ? ` → ⬆ ${ec.extract.name}` : ""}</div> : null; })}
+          {[...activeIds].map(pid => { const p = allProfiles.find(x => x.id === pid); const tasks = (priorityTasks[pid] || []).map(tid => apiTasks?.find(t => t.id === tid)).filter(Boolean); const ec = extractChoices[pid]; return p ? <div key={pid} style={{ background: p.color + "15", border: `1px solid ${p.color}44`, padding: "2px 7px", fontSize: 16, fontFamily: T.mono, color: p.color }}>{p.name}{tasks.length ? ` — ${tasks.map(t => t.name.slice(0, 14)).join(", ")}` : ""}{ec?.extract ? ` → ⬆ ${ec.extract.name}` : ""}</div> : null; })}
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 5%" }}>
@@ -1754,12 +2138,12 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
             return items.length > 0 ? (
               <div style={{ background: "#0a1518", border: "1px solid #1a3a3a", borderLeft: "3px solid #4ababa", padding: 12, marginTop: 10 }}>
                 <SL c={<>ITEMS TO LOOK FOR<Tip text="These are the items needed for your hideout upgrade. Keep an eye out for them at each stop on the route." /></>} s={{ marginBottom: 8 }} />
-                <div style={{ fontSize: 9, color: "#4ababa", marginBottom: 8 }}>{station.name} → Level {hideoutTarget.level}</div>
+                <div style={{ fontSize: 17, color: "#4ababa", marginBottom: 8 }}>{station.name} → Level {hideoutTarget.level}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {items.map((r, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", background: "#4ababa08", border: "1px solid #4ababa22" }}>
-                      <span style={{ fontSize: 10, color: T.textBright }}>{r.item.name}</span>
-                      <span style={{ fontSize: 9, color: "#4ababa", fontFamily: T.mono }}>×{r.count}</span>
+                      <span style={{ fontSize: 20, color: T.textBright }}>{r.item.name}</span>
+                      <span style={{ fontSize: 17, color: "#4ababa", fontFamily: T.mono }}>×{r.count}</span>
                     </div>
                   ))}
                 </div>
@@ -1772,11 +2156,47 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 {targetEquipment.map((item, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", background: "#ba8a4a08", border: "1px solid #ba8a4a22" }}>
-                    <span style={{ fontSize: 10, color: T.textBright }}>{item.name}</span>
-                    <span style={{ fontSize: 8, color: "#ba8a4a", fontFamily: T.mono }}>{(item.categories || []).filter(c => c.name !== "Item" && c.name !== "Compound item").map(c => c.name).slice(0, 2).join(" · ")}</span>
+                    <span style={{ fontSize: 20, color: T.textBright }}>{item.name}</span>
+                    <span style={{ fontSize: 16, color: "#ba8a4a", fontFamily: T.mono }}>{(item.categories || []).filter(c => c.name !== "Item" && c.name !== "Compound item").map(c => c.name).slice(0, 2).join(" · ")}</span>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {/* Extract selection — post-route (when no extract was pre-selected) */}
+          {!route.some(w => w.isExtract) && emap && (
+            <div style={{ background: T.surface, border: `1px solid #2a6a2a`, borderLeft: `3px solid #5dba5d`, padding: 12, marginTop: 10 }}>
+              <SL c={<>CHOOSE YOUR EXTRACT<Tip text="Pick your exit point after seeing the route. It will be added as the final waypoint on your map." /></>} s={{ marginBottom: 8 }} />
+              {[...activeIds].map(pid => {
+                const p = allProfiles.find(x => x.id === pid);
+                if (!p) return null;
+                return (
+                  <div key={pid} style={{ marginBottom: 8 }}>
+                    <div style={{ fontSize: 16, color: p.color, letterSpacing: 2, marginBottom: 4, fontFamily: T.mono }}>{p.name.toUpperCase()}'S EXTRACT</div>
+                    <ExtractSelector player={p} mapData={emap} faction={faction} choice={extractChoices[pid] || null}
+                      onChoice={choice => {
+                        const newEC = { ...extractChoices, [pid]: choice };
+                        setExtractChoices(newEC);
+                        // Dynamically append extract waypoints to route
+                        setRoute(prev => {
+                          const withoutExtracts = prev.filter(w => !w.isExtract);
+                          const extractWpMap = new Map();
+                          activeIds.forEach(epid => {
+                            const ec = epid === pid ? choice : newEC[epid];
+                            if (!ec?.extract) return;
+                            const profile = allProfiles.find(x => x.id === epid);
+                            if (!profile) return;
+                            const key = ec.extract.name;
+                            if (!extractWpMap.has(key)) extractWpMap.set(key, { id: `ext_${key.replace(/\s+/g, "_")}`, pct: ec.extract.pct, extractName: ec.extract.name, isExtract: true, players: [] });
+                            extractWpMap.get(key).players.push({ playerId: epid, name: profile.name, color: profile.color, missingItems: ec.missingItems || [] });
+                          });
+                          return [...withoutExtracts, ...extractWpMap.values()];
+                        });
+                      }}
+                    />
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1785,17 +2205,159 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
     </div>
   );
 
+  // ─── Quick Start recommendation ───
+  const quickRec = computeMapRecommendation(allProfiles, apiTasks);
+  const quickTopMap = quickRec[0] || null;
+  const quickTopApiMap = quickTopMap ? apiMaps?.find(m => m.id === quickTopMap.mapId) : null;
+  const quickTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson) : {};
+  const quickTaskCount = Object.values(quickTasks).flat().length;
+  const quickTaskDetails = Object.entries(quickTasks).flatMap(([pid, tids]) => tids.map(tid => {
+    const at = apiTasks?.find(t => t.id === tid);
+    return at ? { name: at.name, trader: at.trader?.name || "" } : null;
+  })).filter(Boolean);
+
+  const handleQuickGo = () => {
+    if (!quickTopMap) return;
+    setSelectedMapId(quickTopMap.mapId);
+    setFaction("pmc");
+    setRouteMode("tasks");
+    const qIds = new Set([myProfile.id]);
+    if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+    setActiveIds(qIds);
+    setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson));
+    setExtractChoices({});
+    setQuickGenPending(true);
+  };
+
+  const handleCustomize = () => {
+    if (quickTopMap) {
+      setSelectedMapId(quickTopMap.mapId);
+      setFaction("pmc");
+      setRouteMode("tasks");
+      const qIds = new Set([myProfile.id]);
+      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+      setActiveIds(qIds);
+      setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson));
+    }
+    setPlannerView("full");
+  };
+
+  // ─── Quick Start view ───
+  if (plannerView === "quick") return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
+        <SL c={<>QUICK START<Tip text="Your recommended raid based on incomplete tasks. Tap GO to jump straight in, or CUSTOMIZE to adjust the map, tasks, and extract." /></>} s={{ marginBottom: 8 }} />
+        {loading && <div style={{ fontSize: 17, color: T.textDim, marginBottom: 6 }}>Loading from tarkov.dev...</div>}
+        {apiError && <div style={{ fontSize: 17, color: "#e05a5a", marginBottom: 6 }}>tarkov.dev unavailable — check connection</div>}
+      </div>
+      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+        {quickTopMap && quickTaskCount > 0 ? (
+          <div style={{ background: T.surface, border: `2px solid ${T.gold}44`, borderLeft: `3px solid ${T.gold}`, padding: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 8 }}>★ RECOMMENDED MAP</div>
+            <div style={{ fontSize: 22, color: T.gold, fontWeight: "bold", fontFamily: T.mono, letterSpacing: 2, marginBottom: 4 }}>{quickTopMap.mapName}</div>
+            <div style={{ fontSize: 16, color: T.textDim, marginBottom: 10 }}>{quickTopMap.totalTasks} task{quickTopMap.totalTasks !== 1 ? "s" : ""} · {quickTopMap.totalIncomplete} objective{quickTopMap.totalIncomplete !== 1 ? "s" : ""} remaining</div>
+
+            <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+              {[{n:1,label:"QUICK"},{n:2,label:"STANDARD"},{n:3,label:"LONG"}].map(o => (
+                <button key={o.n} onClick={() => setTasksPerPerson(o.n)} style={{ flex: 1, background: tasksPerPerson === o.n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === o.n ? T.gold : T.border}`, color: tasksPerPerson === o.n ? T.gold : T.textDim, padding: "6px 4px", fontSize: 16, fontFamily: T.mono, cursor: "pointer", letterSpacing: 1, textAlign: "center" }}>{o.n} {o.label}</button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>PRIORITY TASKS:</div>
+            {quickTaskDetails.map((t, i) => (
+              <div key={i} style={{ background: T.gold + "11", border: `1px solid ${T.gold}33`, borderLeft: `3px solid ${T.gold}`, padding: "8px 10px", marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 17, color: T.textBright }}>★ {t.name}</span>
+                <span style={{ fontSize: 16, color: T.textDim }}>{t.trader}</span>
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button onClick={handleQuickGo} style={{ flex: 2, background: T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs4, fontFamily: T.mono, fontWeight: "bold", letterSpacing: 3, cursor: "pointer" }}>▶ GO</button>
+              <button onClick={handleCustomize} style={{ flex: 1, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "12px 0", fontSize: 17, fontFamily: T.mono, letterSpacing: 2, cursor: "pointer" }}>✎ CUSTOMIZE</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 20, color: T.textDim, marginBottom: 8 }}>No incomplete tasks found.</div>
+            <div style={{ fontSize: 17, color: T.textDim }}>Add tasks in <span style={{ color: T.gold }}>My Profile → Tasks</span> to get a recommendation.</div>
+            <button onClick={() => setPlannerView("full")} style={{ marginTop: 14, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "10px 20px", fontSize: 17, fontFamily: T.mono, letterSpacing: 2, cursor: "pointer" }}>✎ OPEN FULL PLANNER</button>
+          </div>
+        )}
+
+        {/* Other recommended maps */}
+        {quickRec.length > 1 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>OTHER MAPS WITH TASKS:</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {quickRec.slice(1, 4).map(rec => (
+                <button key={rec.mapId} onClick={() => {
+                  setSelectedMapId(rec.mapId);
+                  setFaction("pmc");
+                  setRouteMode("tasks");
+                  const qIds = new Set([myProfile.id]);
+                  if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                  setActiveIds(qIds);
+                  setPriorityTasks(computeQuickTasks(allProfiles, rec.mapId, apiTasks, tasksPerPerson));
+                  setExtractChoices({});
+                  setQuickGenPending(true);
+                }} style={{ flex: 1, minWidth: 100, background: "#0a0d10", border: `1px solid ${T.border}`, padding: "8px 6px", fontSize: 16, color: T.textDim, fontFamily: T.mono, cursor: "pointer", textAlign: "center" }}>
+                  {rec.mapName}<br /><span style={{ fontSize: 14, color: T.gold }}>{rec.totalTasks} task{rec.totalTasks !== 1 ? "s" : ""}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Loot Run shortcut */}
+        <button onClick={() => { setRouteMode("loot"); setPlannerView("full"); }} style={{ width: "100%", background: "#9a8aba11", border: `1px solid #9a8aba44`, padding: "10px 0", fontSize: 17, color: "#9a8aba", fontFamily: T.mono, letterSpacing: 2, cursor: "pointer", marginBottom: 14 }}>◈ LOOT RUN MODE</button>
+      </div>
+    </div>
+  );
+
+  // ─── Full Planner view ───
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
-        <SL c={<>SQUAD RAID PLANNER<Tip text="Plan your squad's raid here. Select a map, import your teammates' codes, choose who's running, pick priority tasks and extracts, then generate an optimized route." /></>} s={{ marginBottom: 6 }} />
-        {loading && <div style={{ fontSize: 9, color: T.textDim, marginBottom: 6 }}>Loading maps from tarkov.dev...</div>}
-        {apiError && <div style={{ fontSize: 9, color: "#e05a5a", marginBottom: 6 }}>tarkov.dev unavailable — check connection</div>}
-        {apiMaps && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 4, paddingBottom: 6 }}>
-            {apiMaps.map(m => <button key={m.id} onClick={() => setSelectedMapId(m.id)} style={{ background: selectedMapId === m.id ? T.gold + "22" : "transparent", border: `1px solid ${selectedMapId === m.id ? T.gold : T.border}`, color: selectedMapId === m.id ? T.gold : T.textDim, padding: "5px 4px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>{m.name}</button>)}
-          </div>
-        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <SL c={<>SQUAD RAID PLANNER<Tip text="Plan your squad's raid here. Select a map, import your teammates' codes, choose who's running, pick priority tasks and extracts, then generate an optimized route." /></>} />
+          <button onClick={() => setPlannerView("quick")} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "4px 10px", fontSize: 16, fontFamily: T.mono, cursor: "pointer", letterSpacing: 1 }}>← QUICK START</button>
+        </div>
+        {loading && <div style={{ fontSize: 17, color: T.textDim, marginBottom: 6 }}>Loading maps from tarkov.dev...</div>}
+        {apiError && <div style={{ fontSize: 17, color: "#e05a5a", marginBottom: 6 }}>tarkov.dev unavailable — check connection</div>}
+        {apiMaps && (() => {
+          const profiles = activeIds.size > 0 ? allProfiles.filter(p => activeIds.has(p.id)) : allProfiles;
+          const taskRanked = computeMapRecommendation(profiles, apiTasks);
+          const taskTopId = taskRanked[0] ? taskRanked[0].mapId : null;
+          let hideoutTopId = null;
+          if (hideoutTarget && apiHideout) {
+            const station = apiHideout.find(s => s.id === hideoutTarget.stationId);
+            const level = station?.levels.find(l => l.level === hideoutTarget.level);
+            if (level) {
+              const neededItems = level.itemRequirements.filter(r => r.item.name !== "Roubles").map(r => ({ id: r.item.id, name: r.item.name, shortName: r.item.shortName, count: r.count }));
+              const itemRanked = computeItemRecommendation(neededItems, apiMaps);
+              hideoutTopId = itemRanked[0] ? itemRanked[0].mapId : null;
+            }
+          }
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 6, paddingBottom: 6 }}>
+              {apiMaps.map(m => {
+                const isSel = selectedMapId === m.id;
+                const isTaskRec = taskTopId === m.id && !isSel;
+                const isHideoutRec = hideoutTopId === m.id && hideoutTopId !== taskTopId && !isSel;
+                const bg = isSel ? T.gold + "33" : isTaskRec ? "#d4b84a11" : isHideoutRec ? "#4ababa11" : "#0a0d10";
+                const border = isSel ? T.gold : isTaskRec ? "#d4b84a66" : isHideoutRec ? "#4ababa66" : T.border;
+                const color = isSel ? T.gold : isTaskRec ? "#d4b84a" : isHideoutRec ? "#4ababa" : T.textDim;
+                return (
+                  <button key={m.id} onClick={() => setSelectedMapId(m.id)} style={{ background: bg, border: `2px solid ${border}`, color, padding: "10px 8px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center", fontWeight: isSel ? "bold" : "normal", transition: "background 0.15s, border-color 0.15s", position: "relative", wordBreak: "break-word", lineHeight: 1.3 }}>
+                    {m.name}
+                    {isTaskRec && <div style={{ fontSize: 16, color: "#d4b84a", letterSpacing: 1, marginTop: 4 }}>★ TASKS</div>}
+                    {isHideoutRec && <div style={{ fontSize: 16, color: "#4ababa", letterSpacing: 1, marginTop: 4 }}>◈ HIDEOUT</div>}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
         {apiTasks && (
           <MapRecommendation
             allProfiles={allProfiles}
@@ -1811,11 +2373,11 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
         {selectedMapId && (
           <>
             <div style={{ display: "flex", marginTop: 8, border: `1px solid ${T.border}` }}>
-              {["pmc", "scav"].map(f => <button key={f} onClick={() => setFaction(f)} style={{ flex: 1, background: faction === f ? (f === "pmc" ? "#0a1520" : "#0a1a0a") : "transparent", color: faction === f ? (f === "pmc" ? "#5ab0d0" : "#5dba5d") : T.textDim, border: "none", padding: 6, fontSize: 9, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{f === "pmc" ? "▲ PMC" : "◆ SCAV"}</button>)}
+              {["pmc", "scav"].map(f => <button key={f} onClick={() => setFaction(f)} style={{ flex: 1, background: faction === f ? (f === "pmc" ? "#0a1520" : "#0a1a0a") : "transparent", color: faction === f ? (f === "pmc" ? "#5ab0d0" : "#5dba5d") : T.textDim, border: "none", padding: 6, fontSize: 17, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{f === "pmc" ? "▲ PMC" : "◆ SCAV"}</button>)}
             </div>
             <div style={{ display: "flex", marginTop: 6, border: `1px solid ${T.border}` }}>
               {[{id:"tasks",label:"★ TASKS",color:"#d4b84a"},{id:"loot",label:"◈ LOOT RUN",color:"#9a8aba"}].map(m => (
-                <button key={m.id} onClick={() => setRouteMode(m.id)} style={{ flex: 1, background: routeMode === m.id ? m.color + "22" : "transparent", color: routeMode === m.id ? m.color : T.textDim, border: "none", padding: 6, fontSize: 9, letterSpacing: 2, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{m.label}</button>
+                <button key={m.id} onClick={() => setRouteMode(m.id)} style={{ flex: 1, background: routeMode === m.id ? m.color + "22" : "transparent", color: routeMode === m.id ? m.color : T.textDim, border: "none", padding: 6, fontSize: 17, letterSpacing: 2, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{m.label}</button>
               ))}
             </div>
           </>
@@ -1823,29 +2385,54 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {/* Squad Room */}
-        <SL c={<>SQUAD ROOM<Tip text="Create a room and share the code with your squad. Everyone joins with the code and profiles sync automatically — no more copy-pasting share codes in Discord." /></>} />
+        {/* Collapsible Squad Section */}
+        <button onClick={() => setSquadExpanded(!squadExpanded)} style={{ width: "100%", background: squadExpanded ? "#0a150a" : T.surface, border: `1px solid ${room.status === "connected" ? "#2a6a4a" : T.border}`, padding: "10px 12px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", fontFamily: T.mono, marginBottom: squadExpanded ? 0 : 14, borderBottom: squadExpanded ? "none" : undefined }}>
+          <span style={{ color: room.status === "connected" ? "#5aba8a" : T.textDim, letterSpacing: 2, fontSize: T.fs1 }}>◈ SQUAD {room.status === "connected" ? `● ${room.roomCode} (${room.roomSquad.length + 1})` : ""}</span>
+          <span style={{ color: T.textDim, fontSize: 16 }}>{squadExpanded ? "▴" : "▾"}</span>
+        </button>
+        {(squadExpanded || room.status === "connected") && <>
+        <SL c={<>SQUAD ROOM<Tip text="Create a room and share the code with your squad. Everyone joins with the code and profiles sync automatically — no more copy-pasting share codes in Discord." /></>} s={{ marginTop: 8 }} />
         <div style={{ background: T.surface, border: `1px solid ${room.status === "connected" ? "#2a6a4a" : T.border}`, padding: 10, marginBottom: 14 }}>
           {room.status === "connected" ? (
             <>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontSize: 8, color: "#5aba8a", letterSpacing: 2, marginBottom: 2 }}>● CONNECTED</div>
-                  <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold", fontFamily: T.mono, letterSpacing: 3 }}>{room.roomCode}</div>
+                  <div style={{ fontSize: 16, color: "#5aba8a", letterSpacing: 2, marginBottom: 2 }}>● CONNECTED</div>
+                  <div style={{ fontSize: 20, color: T.textBright, fontWeight: "bold", fontFamily: T.mono, letterSpacing: 3 }}>{room.roomCode}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 8, color: T.textDim }}>{room.roomSquad.length + 1} in room</div>
-                  <button onClick={room.leaveRoom} style={{ background: "transparent", border: `1px solid #4a2a2a`, color: "#ba5a5a", padding: "4px 10px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, marginTop: 4 }}>LEAVE</button>
+                  <div style={{ fontSize: 16, color: T.textDim }}>{room.roomSquad.length + 1} in room</div>
+                  <button onClick={room.leaveRoom} style={{ background: "transparent", border: `1px solid #4a2a2a`, color: "#ba5a5a", padding: "6px 12px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, marginTop: 4 }}>LEAVE</button>
                 </div>
               </div>
-              <div style={{ fontSize: 9, color: T.textDim }}>Share this code with your squad. Profiles sync live.</div>
+              {/* Leader controls */}
+              <div style={{ background: room.hasLeader ? "#0a150a" : "#0a0d10", border: `1px solid ${room.hasLeader ? "#2a5a2a" : T.border}`, padding: 8, marginBottom: 8 }}>
+                {room.hasLeader ? (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontSize: 16, letterSpacing: 2, color: "#ba8a4a", marginBottom: 2 }}>★ SQUAD LEADER</div>
+                      <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold" }}>
+                        {room.isLeader ? "You are leading" : (() => { const leader = room.roomSquad.find(m => m.deviceId === room.leaderId); return leader ? leader.name : "..."; })()}
+                      </div>
+                      {!room.isLeader && <div style={{ fontSize: 16, color: T.textDim, marginTop: 2 }}>Leader picks map, tasks & extracts. Route syncs to you.</div>}
+                    </div>
+                    {room.isLeader && <button onClick={room.releaseLeader} style={{ background: "transparent", border: "1px solid #4a3a1a", color: "#ba8a4a", padding: "6px 12px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1 }}>STEP DOWN</button>}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 17, color: T.textDim }}>No squad leader — everyone plans independently.</div>
+                    <button onClick={room.claimLeader} style={{ background: "#ba8a4a22", border: "1px solid #ba8a4a", color: "#ba8a4a", padding: "6px 12px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, whiteSpace: "nowrap" }}>★ LEAD RAID</button>
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: 17, color: T.textDim }}>Share this code with your squad. Profiles sync live.</div>
               {room.roomSquad.length > 0 && (
                 <div style={{ marginTop: 8, borderTop: `1px solid ${T.border}`, paddingTop: 8 }}>
                   {room.roomSquad.map(p => (
                     <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: p.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, color: p.color, fontWeight: "bold" }}>{p.name}</span>
-                      <span style={{ fontSize: 8, color: T.textDim }}>{p.tasks.length} tasks</span>
+                      <span style={{ fontSize: 20, color: p.color, fontWeight: "bold" }}>{p.name}</span>
+                      <span style={{ fontSize: 16, color: T.textDim }}>{p.tasks.length} tasks</span>
                     </div>
                   ))}
                 </div>
@@ -1853,16 +2440,16 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
             </>
           ) : (
             <>
-              <div style={{ fontSize: 10, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>Create a room or join one with a code. Profiles sync automatically.</div>
+              <div style={{ fontSize: 20, color: T.text, lineHeight: 1.6, marginBottom: 10 }}>Create a room or join one with a code. Profiles sync automatically.</div>
               <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                <button onClick={room.createRoom} disabled={room.status === "creating"} style={{ flex: 1, background: "#0a150a", border: `1px solid #2a6a4a`, color: "#5aba8a", padding: "8px 0", fontSize: 9, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2 }}>{room.status === "creating" ? "CREATING..." : "◈ CREATE ROOM"}</button>
+                <button onClick={room.createRoom} disabled={room.status === "creating"} style={{ flex: 1, background: "#0a150a", border: `1px solid #2a6a4a`, color: "#5aba8a", padding: "10px 0", fontSize: 20, cursor: "pointer", fontFamily: T.mono, letterSpacing: 2 }}>{room.status === "creating" ? "CREATING..." : "◈ CREATE ROOM"}</button>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="ALPHA-123"
-                  style={{ flex: 1, background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: 11, fontFamily: T.mono, outline: "none", boxSizing: "border-box", letterSpacing: 2, textTransform: "uppercase" }} />
-                <button onClick={() => room.joinRoom(joinCode)} disabled={!joinCode.trim() || room.status === "joining"} style={{ background: joinCode.trim() ? "#0a1520" : "transparent", border: `1px solid ${joinCode.trim() ? "#2a4a6a" : T.border}`, color: joinCode.trim() ? "#5a9aba" : T.textDim, padding: "8px 14px", fontSize: 9, cursor: joinCode.trim() ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2 }}>{room.status === "joining" ? "..." : "JOIN"}</button>
+                  style={{ flex: 1, background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: 16, fontFamily: T.mono, outline: "none", boxSizing: "border-box", letterSpacing: 2, textTransform: "uppercase" }} />
+                <button onClick={() => room.joinRoom(joinCode)} disabled={!joinCode.trim() || room.status === "joining"} style={{ background: joinCode.trim() ? "#0a1520" : "transparent", border: `1px solid ${joinCode.trim() ? "#2a4a6a" : T.border}`, color: joinCode.trim() ? "#5a9aba" : T.textDim, padding: "8px 14px", fontSize: 17, cursor: joinCode.trim() ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2 }}>{room.status === "joining" ? "..." : "JOIN"}</button>
               </div>
-              {room.error && <div style={{ fontSize: 9, color: "#e05a5a", marginTop: 6 }}>{room.error}</div>}
+              {room.error && <div style={{ fontSize: 17, color: "#e05a5a", marginTop: 6 }}>{room.error}</div>}
             </>
           )}
         </div>
@@ -1870,12 +2457,13 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
         {/* Import squadmate (fallback) */}
         <SL c={<>IMPORT SQUADMATE CODE<Tip step="FALLBACK" text="If a squadmate can't join the room, they can still share their code the old way — copy from My Profile, paste here." /></>} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: 10, color: T.text, lineHeight: 1.6, marginBottom: 8 }}>Ask each squadmate to copy their code from My Profile and paste it in Discord.</div>
+          <div style={{ fontSize: 20, color: T.text, lineHeight: 1.6, marginBottom: 8 }}>Ask each squadmate to copy their code from My Profile and paste it in Discord.</div>
           <textarea value={importCode} onChange={e => setImportCode(e.target.value)} placeholder="Paste squadmate's TG2:... code here"
-            style={{ width: "100%", background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: 10, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 8 }} />
-          {importError && <div style={{ fontSize: 9, color: "#e05a5a", marginBottom: 6 }}>{importError}</div>}
-          <button onClick={handleImport} disabled={!importCode.trim()} style={{ width: "100%", background: importCode.trim() ? "#0a1520" : "transparent", border: `1px solid ${importCode.trim() ? "#2a4a6a" : T.border}`, color: importCode.trim() ? "#5a9aba" : T.textDim, padding: "8px 0", fontSize: 9, cursor: importCode.trim() ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase" }}>↓ IMPORT SQUADMATE</button>
+            style={{ width: "100%", background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: 20, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 8 }} />
+          {importError && <div style={{ fontSize: 17, color: "#e05a5a", marginBottom: 6 }}>{importError}</div>}
+          <button onClick={handleImport} disabled={!importCode.trim()} style={{ width: "100%", background: importCode.trim() ? "#0a1520" : "transparent", border: `1px solid ${importCode.trim() ? "#2a4a6a" : T.border}`, color: importCode.trim() ? "#5a9aba" : T.textDim, padding: "10px 0", fontSize: 20, cursor: importCode.trim() ? "pointer" : "default", fontFamily: T.mono, letterSpacing: 2, textTransform: "uppercase" }}>↓ IMPORT SQUADMATE</button>
         </div>
+        </>}
 
         {/* Players */}
         <SL c={<>SELECT WHO'S RUNNING THIS RAID<Tip step="STEP 2" text="Check the box next to each player joining this raid. In Tasks mode, pick a priority task per player. In Loot Run mode, the route hits all key loot spots on the map." /></>} />
@@ -1886,23 +2474,28 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           return (
             <div key={p.id} style={{ background: isActive ? p.color + "10" : T.surface, border: `1px solid ${isActive ? p.color : (isMe ? T.borderBright : T.border)}`, borderLeft: `3px solid ${p.color}`, padding: 10, marginBottom: 6 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isActive && selectedMapId && routeMode === "tasks" ? 8 : 0 }}>
-                <button onClick={() => toggleActive(p.id)} style={{ width: 20, height: 20, background: isActive ? p.color : "transparent", border: `1px solid ${p.color}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isActive ? T.bg : T.textDim, fontSize: 12, flexShrink: 0 }}>{isActive ? "✓" : ""}</button>
+                <button onClick={() => toggleActive(p.id)} style={{ width: 20, height: 20, background: isActive ? p.color : "transparent", border: `1px solid ${p.color}`, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: isActive ? T.bg : T.textDim, fontSize: 17, flexShrink: 0 }}>{isActive ? "✓" : ""}</button>
                 <div style={{ flex: 1 }}>
-                  <div style={{ color: p.color, fontSize: 12, fontWeight: "bold" }}>{p.name || "(no name)"}{isMe && <span style={{ fontSize: 8, color: T.textDim, fontWeight: "normal", marginLeft: 5 }}>YOU</span>}</div>
-                  {!isMe && <div style={{ fontSize: 8, color: p.isRoomMember ? "#5aba8a" : T.textDim }}>{p.isRoomMember ? "● Live synced" : `Imported ${new Date(p.importedAt).toLocaleDateString()}`} · {p.tasks?.length || 0} tasks</div>}
+                  <div style={{ color: p.color, fontSize: 17, fontWeight: "bold" }}>{p.name || "(no name)"}{isMe && <span style={{ fontSize: 16, color: T.textDim, fontWeight: "normal", marginLeft: 5 }}>YOU</span>}</div>
+                  {!isMe && <div style={{ fontSize: 16, color: p.isRoomMember ? "#5aba8a" : T.textDim }}>{p.isRoomMember ? "● Live synced" : `Imported ${new Date(p.importedAt).toLocaleDateString()}`} · {p.tasks?.length || 0} tasks</div>}
                 </div>
                 <Badge label={`${p.tasks?.length || 0} tasks`} color={p.color} />
-                {!isMe && !p.isRoomMember && <button onClick={() => { saveImportedSquad(importedSquad.filter(x => x.id !== p.id)); setActiveIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }} style={{ background: "transparent", border: "none", color: "#6a3a3a", cursor: "pointer", fontSize: 13, padding: "0 2px" }}>×</button>}
+                {!isMe && !p.isRoomMember && <button onClick={() => { saveImportedSquad(importedSquad.filter(x => x.id !== p.id)); setActiveIds(prev => { const n = new Set(prev); n.delete(p.id); return n; }); }} style={{ background: "transparent", border: "none", color: "#6a3a3a", cursor: "pointer", fontSize: 20, padding: "0 2px" }}>×</button>}
               </div>
               {isActive && selectedMapId && routeMode === "tasks" && (
                 <>
-                  <div style={{ fontSize: 8, color: T.textDim, letterSpacing: 2, marginBottom: 5 }}>PRIORITY TASK THIS RAID:</div>
+                  <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 5 }}>PRIORITY TASKS THIS RAID (up to {tasksPerPerson}):</div>
                   {mapTasks.length === 0 ? (
-                    <div style={{ fontSize: 9, color: T.textDim }}>No tasks for this map{isMe ? " — add them in My Profile." : "."}</div>
+                    <div style={{ fontSize: 17, color: T.textDim }}>No tasks for this map{isMe ? " — add them in My Profile." : "."}</div>
                   ) : mapTasks.map(t => {
                     const at = apiTasks?.find(x => x.id === t.taskId); if (!at) return null;
-                    const isPri = priorityTasks[p.id] === t.taskId;
-                    return <button key={t.taskId} onClick={() => setPriorityTasks(pt => ({ ...pt, [p.id]: t.taskId }))} style={{ width: "100%", background: isPri ? p.color + "22" : "transparent", border: `1px solid ${isPri ? p.color : T.border}`, color: isPri ? p.color : T.textDim, padding: "6px 8px", textAlign: "left", cursor: "pointer", fontFamily: T.mono, fontSize: 9, marginBottom: 4 }}>{isPri ? "★ " : ""}{at.name}</button>;
+                    const selected = priorityTasks[p.id] || [];
+                    const isPri = selected.includes(t.taskId);
+                    const atLimit = selected.length >= tasksPerPerson && !isPri;
+                    return <button key={t.taskId} onClick={() => {
+                      if (isPri) { setPriorityTasks(pt => ({ ...pt, [p.id]: selected.filter(id => id !== t.taskId) })); }
+                      else if (!atLimit) { setPriorityTasks(pt => ({ ...pt, [p.id]: [...selected, t.taskId] })); }
+                    }} style={{ width: "100%", background: isPri ? p.color + "22" : "transparent", border: `1px solid ${isPri ? p.color : T.border}`, color: atLimit ? T.border : (isPri ? p.color : T.textDim), padding: "6px 8px", textAlign: "left", cursor: atLimit ? "default" : "pointer", fontFamily: T.mono, fontSize: 17, marginBottom: 4, opacity: atLimit ? 0.5 : 1 }}>{isPri ? "★ " : ""}{at.name}</button>;
                   })}
                 </>
               )}
@@ -1910,7 +2503,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           );
         })}
 
-        {importedSquad.length === 0 && <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: "14px 10px", textAlign: "center", marginBottom: 12 }}><div style={{ fontSize: 10, color: T.textDim }}>No squadmates imported yet.<br />Paste their codes above.</div></div>}
+        {importedSquad.length === 0 && <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: "14px 10px", textAlign: "center", marginBottom: 12 }}><div style={{ fontSize: 20, color: T.textDim }}>No squadmates imported yet.<br />Paste their codes above.</div></div>}
 
         {/* ── LOOT POINTS PREVIEW (loot mode) ── */}
         {routeMode === "loot" && selectedMapId && emap && (() => {
@@ -1927,7 +2520,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
                 {id:"equipment",label:"EQUIPMENT",color:"#ba8a4a"},
               ].map(m => (
                 <button key={m.id} onClick={() => !m.disabled && setLootSubMode(m.id)} style={{
-                  flex: 1, padding: "6px 4px", fontSize: 8, letterSpacing: 1, fontFamily: T.mono,
+                  flex: 1, padding: "6px 4px", fontSize: 16, letterSpacing: 1, fontFamily: T.mono,
                   background: lootSubMode === m.id ? m.color + "22" : "transparent",
                   border: `1px solid ${lootSubMode === m.id ? m.color : T.border}`,
                   color: m.disabled ? T.border : (lootSubMode === m.id ? m.color : T.textDim),
@@ -1939,7 +2532,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
             {/* Hideout mode info */}
             {lootSubMode === "hideout" && !hasHideout && (
               <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 10, marginBottom: 8, textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: T.textDim }}>Set a hideout target in My Profile → Hideout first.</div>
+                <div style={{ fontSize: 17, color: T.textDim }}>Set a hideout target in My Profile → Hideout first.</div>
               </div>
             )}
             {lootSubMode === "hideout" && hasHideout && (() => {
@@ -1947,11 +2540,11 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
               const level = station?.levels.find(l => l.level === hideoutTarget.level);
               return station && level ? (
                 <div style={{ background: "#0a1518", border: "1px solid #1a3a3a", borderLeft: "3px solid #4ababa", padding: "8px 10px", marginBottom: 8 }}>
-                  <div style={{ fontSize: 8, letterSpacing: 2, color: "#4ababa", marginBottom: 3 }}>TARGETING ITEMS FOR:</div>
-                  <div style={{ fontSize: 11, color: T.textBright, fontWeight: "bold", marginBottom: 4 }}>{station.name} → Level {hideoutTarget.level}</div>
+                  <div style={{ fontSize: 16, letterSpacing: 2, color: "#4ababa", marginBottom: 3 }}>TARGETING ITEMS FOR:</div>
+                  <div style={{ fontSize: 16, color: T.textBright, fontWeight: "bold", marginBottom: 4 }}>{station.name} → Level {hideoutTarget.level}</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {level.itemRequirements.filter(r => r.item.name !== "Roubles").map((r, i) => (
-                      <div key={i} style={{ fontSize: 8, color: "#4ababa", background: "#4ababa15", border: "1px solid #4ababa33", padding: "2px 6px" }}>
+                      <div key={i} style={{ fontSize: 16, color: "#4ababa", background: "#4ababa15", border: "1px solid #4ababa33", padding: "2px 6px" }}>
                         {r.item.shortName || r.item.name} ×{r.count}
                       </div>
                     ))}
@@ -1964,34 +2557,34 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
             {lootSubMode === "equipment" && (
               <div style={{ marginBottom: 8 }}>
                 <div style={{ background: "#1a1408", border: "1px solid #5a4a1a", borderLeft: "3px solid #ba8a4a", padding: "8px 10px", marginBottom: 8 }}>
-                  <div style={{ fontSize: 8, letterSpacing: 2, color: "#ba8a4a", marginBottom: 4 }}>TARGET EQUIPMENT<Tip text="Search for any item — weapons, armor, barter goods, keys, etc. The route will only visit locations likely to contain your targeted items." /></div>
+                  <div style={{ fontSize: 16, letterSpacing: 2, color: "#ba8a4a", marginBottom: 4 }}>TARGET EQUIPMENT<Tip text="Search for any item — weapons, armor, barter goods, keys, etc. The route will only visit locations likely to contain your targeted items." /></div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <input value={equipSearch} onChange={e => setEquipSearch(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && searchEquipment(equipSearch)}
                       placeholder="Search items (e.g. AK-74, Slick, GPU)..."
-                      style={{ flex: 1, background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 8px", fontSize: 10, fontFamily: T.mono, outline: "none", boxSizing: "border-box" }} />
+                      style={{ flex: 1, background: "#0a0d10", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 8px", fontSize: 20, fontFamily: T.mono, outline: "none", boxSizing: "border-box" }} />
                     <button onClick={() => searchEquipment(equipSearch)}
-                      style={{ background: "#ba8a4a22", border: "1px solid #ba8a4a", color: "#ba8a4a", padding: "6px 10px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, flexShrink: 0 }}>SEARCH</button>
+                      style={{ background: "#ba8a4a22", border: "1px solid #ba8a4a", color: "#ba8a4a", padding: "6px 10px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, letterSpacing: 1, flexShrink: 0 }}>SEARCH</button>
                   </div>
                 </div>
 
                 {/* Search results */}
-                {equipSearching && <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", padding: 8 }}>Searching tarkov.dev...</div>}
+                {equipSearching && <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", padding: 8 }}>Searching tarkov.dev...</div>}
                 {equipResults && !equipSearching && (
                   <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 8 }}>
-                    {equipResults.length === 0 && <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", padding: 8 }}>No items found.</div>}
+                    {equipResults.length === 0 && <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", padding: 8 }}>No items found.</div>}
                     {equipResults.map(item => {
                       const added = targetEquipment.some(e => e.id === item.id);
                       return (
                         <div key={item.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 8px", marginBottom: 2, background: added ? "#ba8a4a15" : T.surface, border: `1px solid ${added ? "#ba8a4a44" : T.border}` }}>
                           <div>
-                            <div style={{ fontSize: 10, color: T.textBright }}>{item.name}</div>
-                            <div style={{ fontSize: 8, color: T.textDim }}>{item.categories?.map(c => c.name).filter(n => n !== "Item" && n !== "Compound item").slice(0, 3).join(" · ")}</div>
+                            <div style={{ fontSize: 20, color: T.textBright }}>{item.name}</div>
+                            <div style={{ fontSize: 16, color: T.textDim }}>{item.categories?.map(c => c.name).filter(n => n !== "Item" && n !== "Compound item").slice(0, 3).join(" · ")}</div>
                           </div>
                           <button onClick={() => {
                             if (added) saveTargetEquipment(targetEquipment.filter(e => e.id !== item.id));
                             else saveTargetEquipment([...targetEquipment, { id: item.id, name: item.name, shortName: item.shortName, categories: item.categories }]);
-                          }} style={{ background: added ? "#1a0a0a" : "transparent", border: `1px solid ${added ? "#6a2a2a" : "#ba8a4a"}`, color: added ? "#e05a5a" : "#ba8a4a", padding: "3px 8px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, flexShrink: 0 }}>
+                          }} style={{ background: added ? "#1a0a0a" : "transparent", border: `1px solid ${added ? "#6a2a2a" : "#ba8a4a"}`, color: added ? "#e05a5a" : "#ba8a4a", padding: "4px 8px", fontSize: 17, cursor: "pointer", fontFamily: T.mono, flexShrink: 0 }}>
                             {added ? "✕" : "+ ADD"}
                           </button>
                         </div>
@@ -2003,13 +2596,13 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
                 {/* Selected equipment */}
                 {targetEquipment.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 8, letterSpacing: 2, color: "#ba8a4a", marginBottom: 4 }}>TARGETING {targetEquipment.length} ITEM{targetEquipment.length !== 1 ? "S" : ""}:</div>
+                    <div style={{ fontSize: 16, letterSpacing: 2, color: "#ba8a4a", marginBottom: 4 }}>TARGETING {targetEquipment.length} ITEM{targetEquipment.length !== 1 ? "S" : ""}:</div>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
                       {targetEquipment.map(item => (
                         <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#ba8a4a15", border: "1px solid #ba8a4a33", padding: "3px 6px" }}>
-                          <span style={{ fontSize: 9, color: "#ba8a4a" }}>{item.shortName || item.name}</span>
+                          <span style={{ fontSize: 17, color: "#ba8a4a" }}>{item.shortName || item.name}</span>
                           <button onClick={() => saveTargetEquipment(targetEquipment.filter(e => e.id !== item.id))}
-                            style={{ background: "transparent", border: "none", color: "#6a3a3a", cursor: "pointer", fontSize: 10, padding: 0 }}>×</button>
+                            style={{ background: "transparent", border: "none", color: "#6a3a3a", cursor: "pointer", fontSize: 20, padding: 0 }}>×</button>
                         </div>
                       ))}
                     </div>
@@ -2018,14 +2611,14 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
                   </div>
                 )}
                 {targetEquipment.length === 0 && !equipResults && (
-                  <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", padding: 8 }}>Search and add items you want to find in raid.</div>
+                  <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", padding: 8 }}>Search and add items you want to find in raid.</div>
                 )}
               </div>
             )}
 
             <div style={{ background: "#0f0a18", border: "1px solid #4a3a6a", borderLeft: "3px solid #9a8aba", padding: "10px 12px", marginBottom: 10 }}>
-              <div style={{ fontSize: 9, color: "#9a8aba", letterSpacing: 3, marginBottom: 4 }}>◈ {lootSubMode === "hideout" ? "HIDEOUT" : lootSubMode === "equipment" ? "EQUIPMENT" : "LOOT"} RUN — {emap.name.toUpperCase()}<Tip text="ALL hits every loot spot. HIDEOUT filters to spots matching your hideout upgrade needs. EQUIPMENT filters to spots matching your targeted items." /></div>
-              <div style={{ fontSize: 10, color: T.text, lineHeight: 1.7 }}>
+              <div style={{ fontSize: 17, color: "#9a8aba", letterSpacing: 3, marginBottom: 4 }}>◈ {lootSubMode === "hideout" ? "HIDEOUT" : lootSubMode === "equipment" ? "EQUIPMENT" : "LOOT"} RUN — {emap.name.toUpperCase()}<Tip text="ALL hits every loot spot. HIDEOUT filters to spots matching your hideout upgrade needs. EQUIPMENT filters to spots matching your targeted items." /></div>
+              <div style={{ fontSize: 20, color: T.text, lineHeight: 1.7 }}>
                 Route will hit {filteredLP.length} of {emap.lootPoints?.length || 0} loot locations{lootSubMode !== "all" ? " (filtered)" : ""}, ending at your chosen extract.
               </div>
             </div>
@@ -2034,16 +2627,16 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
               return (
                 <div key={i} style={{ background: lc.bg, border: `1px solid ${lc.border}`, borderLeft: `3px solid ${lc.color}`, padding: "7px 10px", marginBottom: 4 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 10, color: T.textBright, fontWeight: "bold" }}>{lc.icon} {lp.name}</div>
+                    <div style={{ fontSize: 20, color: T.textBright, fontWeight: "bold" }}>{lc.icon} {lp.name}</div>
                     <div style={{ fontSize: 7, color: lc.color, letterSpacing: 1, background: lc.border + "44", padding: "2px 6px" }}>{lc.label.toUpperCase()}</div>
                   </div>
-                  <div style={{ fontSize: 9, color: lc.color, marginTop: 3 }}>{lp.note}</div>
+                  <div style={{ fontSize: 17, color: lc.color, marginTop: 3 }}>{lp.note}</div>
                 </div>
               );
             })}
             {filteredLP.length === 0 && (
               <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 14, textAlign: "center" }}>
-                <div style={{ fontSize: 10, color: T.textDim }}>No matching loot locations on this map for your {lootSubMode === "hideout" ? "hideout target" : "targeted items"}.</div>
+                <div style={{ fontSize: 20, color: T.textDim }}>No matching loot locations on this map for your {lootSubMode === "hideout" ? "hideout target" : "targeted items"}.</div>
               </div>
             )}
           </div>
@@ -2054,8 +2647,8 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
         {selectedMapId && emap && activeIds.size > 0 && (
           <div style={{ marginTop: 8, marginBottom: 14 }}>
             <div style={{ background: "#0a0d18", border: "1px solid #2a3a5a", borderLeft: "3px solid #5a7aba", padding: "10px 12px", marginBottom: 12 }}>
-              <div style={{ fontSize: 9, color: "#5a7aba", letterSpacing: 3, marginBottom: 4 }}>⬆ EXTRACT SELECTION<Tip step={routeMode === "tasks" ? "STEP 3" : "STEP 3"} text="Pick each player's intended extract. Special extracts (key, paracord, etc.) will ask if you have the required items. Your chosen extract becomes the final stop on the route." /></div>
-              <div style={{ fontSize: 10, color: T.text, lineHeight: 1.7 }}>
+              <div style={{ fontSize: 17, color: "#5a7aba", letterSpacing: 3, marginBottom: 4 }}>⬆ EXTRACT SELECTION<Tip step={routeMode === "tasks" ? "STEP 3" : "STEP 3"} text="Pick each player's intended extract. Special extracts (key, paracord, etc.) will ask if you have the required items. Your chosen extract becomes the final stop on the route." /></div>
+              <div style={{ fontSize: 20, color: T.text, lineHeight: 1.7 }}>
                 Extracts are only revealed when the raid loads — but you can plan ahead. Select your intended exit now. Special extracts will ask if you have required items before adding them to the route.
               </div>
             </div>
@@ -2063,7 +2656,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
               const p = allProfiles.find(x => x.id === pid); if (!p) return null;
               return (
                 <div key={pid} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 8, color: p.color, letterSpacing: 2, marginBottom: 5, fontFamily: T.mono }}>
+                  <div style={{ fontSize: 16, color: p.color, letterSpacing: 2, marginBottom: 5, fontFamily: T.mono }}>
                     {p.name.toUpperCase()}'S EXTRACT
                   </div>
                   <ExtractSelector
@@ -2079,16 +2672,29 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           </div>
         )}
 
+        {/* Tasks per person */}
+        {routeMode === "tasks" && selectedMapId && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 17, color: T.textDim, letterSpacing: 1, fontFamily: T.mono, whiteSpace: "nowrap" }}>TASKS PER PERSON:</div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {[1, 2, 3].map(n => (
+                <button key={n} onClick={() => setTasksPerPerson(n)} style={{ width: 32, height: 28, background: tasksPerPerson === n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === n ? T.gold : T.border}`, color: tasksPerPerson === n ? T.gold : T.textDim, fontSize: 16, cursor: "pointer", fontFamily: T.mono, fontWeight: tasksPerPerson === n ? "bold" : "normal" }}>{n}</button>
+              ))}
+            </div>
+            <div style={{ fontSize: 16, color: T.textDim }}>{tasksPerPerson === 1 ? "Quick raid" : tasksPerPerson === 2 ? "Standard raid" : "Long raid"}</div>
+          </div>
+        )}
+
         {/* Generate */}
         <button onClick={generateRoute} disabled={!canGenerate}
-          style={{ width: "100%", background: canGenerate ? (routeMode === "loot" ? "#9a8aba" : T.gold) : "transparent", color: canGenerate ? T.bg : T.textDim, border: `1px solid ${canGenerate ? (routeMode === "loot" ? "#9a8aba" : T.gold) : T.border}`, padding: "13px 0", fontSize: 11, letterSpacing: 3, cursor: canGenerate ? "pointer" : "default", fontFamily: T.mono, textTransform: "uppercase", fontWeight: "bold", marginBottom: 8 }}>
+          style={{ width: "100%", background: canGenerate ? (routeMode === "loot" ? T.purple : T.gold) : "transparent", color: canGenerate ? T.bg : T.textDim, border: `2px solid ${canGenerate ? (routeMode === "loot" ? T.purple : T.gold) : T.border}`, padding: `${T.sp3}px 0`, fontSize: T.fs4, letterSpacing: 3, cursor: canGenerate ? "pointer" : "default", fontFamily: T.mono, textTransform: "uppercase", fontWeight: "bold", marginBottom: T.sp2, transition: "background 0.15s, border-color 0.15s" }}>
           ▶ {routeMode === "loot" ? (lootSubMode === "hideout" ? "GENERATE HIDEOUT RUN" : lootSubMode === "equipment" ? "GENERATE EQUIPMENT RUN" : "GENERATE LOOT RUN") : "GENERATE ROUTE"}{activeIds.size > 0 ? ` — ${activeIds.size} PLAYER${activeIds.size > 1 ? "S" : ""}` : ""}
         </button>
-        {!selectedMapId && <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", fontFamily: T.mono, marginBottom: 4 }}>Select a map above to get started</div>}
-        {routeMode === "tasks" && selectedMapId && activeIds.size > 0 && ![...activeIds].some(id => priorityTasks[id]) && <div style={{ fontSize: 9, color: T.textDim, textAlign: "center", fontFamily: T.mono, marginBottom: 4 }}>Select a priority task for at least one active player</div>}
+        {!selectedMapId && <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", fontFamily: T.mono, marginBottom: 4 }}>Select a map above to get started</div>}
+        {routeMode === "tasks" && selectedMapId && activeIds.size > 0 && ![...activeIds].some(id => (priorityTasks[id] || []).length > 0) && <div style={{ fontSize: 17, color: T.textDim, textAlign: "center", fontFamily: T.mono, marginBottom: 4 }}>Select a priority task for at least one active player</div>}
 
         <div style={{ marginTop: 12, background: T.surface, border: "1px solid #1a2a3a", borderLeft: "3px solid #2a4a6a", padding: 10 }}>
-          <div style={{ fontSize: 9, color: "#5a7aba", lineHeight: 1.8 }}>{routeMode === "loot" ? "◈ Loot positions are approximate — use tarkov.dev for exact locations." : "ℹ Task data live from tarkov.dev — always current patch."}<br />Extract positions are approximate — exact locations shown on tarkov.dev.{routeMode === "tasks" && <><br />Reshare your code after completing tasks.</>}</div>
+          <div style={{ fontSize: 17, color: "#5a7aba", lineHeight: 1.8 }}>{routeMode === "loot" ? "◈ Loot positions are approximate — use tarkov.dev for exact locations." : "ℹ Task data live from tarkov.dev — always current patch."}<br />Extract positions are approximate — exact locations shown on tarkov.dev.{routeMode === "tasks" && <><br />Reshare your code after completing tasks.</>}</div>
         </div>
         <div style={{ height: 20 }} />
       </div>
@@ -2113,24 +2719,24 @@ function ExtractsTab() {
         </div>
         {sv === "extracts" && <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 4, paddingBottom: 10 }}>
-            {EMAPS.map(m => <button key={m.id} onClick={() => { setSel(m); setFil("all"); }} style={{ background: sel.id === m.id ? m.color + "22" : "transparent", border: `1px solid ${sel.id === m.id ? m.color : T.border}`, color: sel.id === m.id ? m.color : T.textDim, padding: "5px 4px", fontSize: 8, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>{m.name}</button>)}
+            {EMAPS.map(m => <button key={m.id} onClick={() => { setSel(m); setFil("all"); }} style={{ background: sel.id === m.id ? m.color + "22" : "transparent", border: `1px solid ${sel.id === m.id ? m.color : T.border}`, color: sel.id === m.id ? m.color : T.textDim, padding: "5px 4px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>{m.name}</button>)}
           </div>
           <div style={{ display: "flex", marginBottom: 10, border: `1px solid ${T.border}` }}>
-            {["pmc", "scav"].map(f => <button key={f} onClick={() => { setFac(f); setFil("all"); }} style={{ flex: 1, background: fac === f ? (f === "pmc" ? "#0a1520" : "#0a1a0a") : "transparent", color: fac === f ? (f === "pmc" ? "#5ab0d0" : "#5dba5d") : T.textDim, border: "none", padding: 7, fontSize: 9, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{f === "pmc" ? "▲ PMC" : "◆ SCAV"}</button>)}
+            {["pmc", "scav"].map(f => <button key={f} onClick={() => { setFac(f); setFil("all"); }} style={{ flex: 1, background: fac === f ? (f === "pmc" ? "#0a1520" : "#0a1a0a") : "transparent", color: fac === f ? (f === "pmc" ? "#5ab0d0" : "#5dba5d") : T.textDim, border: "none", padding: 7, fontSize: 17, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{f === "pmc" ? "▲ PMC" : "◆ SCAV"}</button>)}
           </div>
         </>}
       </div>
       <div style={{ overflowY: "auto", flex: 1, padding: 14 }}>
         {sv === "roadmap" && <>
-          <div style={{ background: "#0a1a0a", border: "1px solid #1a3a1a", borderLeft: "3px solid #4a9a4a", padding: "10px 12px", marginBottom: 14, fontSize: 10, color: "#7ab87a", lineHeight: 1.7 }}>⚔ PvE — Co-op extracts N/A. Difficulty = boss/Raider danger.</div>
+          <div style={{ background: "#0a1a0a", border: "1px solid #1a3a1a", borderLeft: "3px solid #4a9a4a", padding: "10px 12px", marginBottom: 14, fontSize: 20, color: "#7ab87a", lineHeight: 1.7 }}>⚔ PvE — Co-op extracts N/A. Difficulty = boss/Raider danger.</div>
           {["Beginner", "Intermediate", "Advanced", "Endgame"].map(tier => (
             <div key={tier} style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 8, letterSpacing: 4, color: TC[tier], borderBottom: `1px solid ${TC[tier]}33`, paddingBottom: 5, marginBottom: 8, fontFamily: T.mono }}>{tier.toUpperCase()}</div>
+              <div style={{ fontSize: 16, letterSpacing: 4, color: TC[tier], borderBottom: `1px solid ${TC[tier]}33`, paddingBottom: 5, marginBottom: 8, fontFamily: T.mono }}>{tier.toUpperCase()}</div>
               {EMAPS.filter(m => m.tier === tier).map(map => (
                 <div key={map.id} onClick={() => { setSel(map); setSv("extracts"); setFil("all"); }} style={{ background: T.surface, border: `1px solid ${map.color}33`, borderLeft: `3px solid ${map.color}`, padding: 10, marginBottom: 7, cursor: "pointer" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}><div style={{ color: map.color, fontSize: 12, fontWeight: "bold" }}>{map.name}</div><div style={{ fontSize: 9, color: T.textDim }}>{"★".repeat(map.diff)}{"☆".repeat(5 - map.diff)}</div></div>
-                  <div style={{ fontSize: 10, color: T.textDim, lineHeight: 1.5, marginBottom: 5 }}>{map.desc}</div>
-                  <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 5 }}>{map.bosses.map((b, i) => <div key={i} style={{ fontSize: 9, color: "#9a3a3a", marginBottom: 2 }}>☠ {b}</div>)}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}><div style={{ color: map.color, fontSize: 17, fontWeight: "bold" }}>{map.name}</div><div style={{ fontSize: 17, color: T.textDim }}>{"★".repeat(map.diff)}{"☆".repeat(5 - map.diff)}</div></div>
+                  <div style={{ fontSize: 20, color: T.textDim, lineHeight: 1.5, marginBottom: 5 }}>{map.desc}</div>
+                  <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 5 }}>{map.bosses.map((b, i) => <div key={i} style={{ fontSize: 17, color: "#9a3a3a", marginBottom: 2 }}>☠ {b}</div>)}</div>
                 </div>
               ))}
             </div>
@@ -2138,15 +2744,15 @@ function ExtractsTab() {
         </>}
         {sv === "extracts" && <>
           <div style={{ background: T.surface, border: `1px solid ${sel.color}33`, borderLeft: `3px solid ${sel.color}`, padding: 10, marginBottom: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ color: sel.color, fontSize: 14, fontWeight: "bold" }}>{sel.name}</div><Badge label={sel.tier} color={TC[sel.tier]} /></div>
-            <div style={{ fontSize: 10, color: T.textDim, margin: "5px 0 7px", lineHeight: 1.5 }}>{sel.desc}</div>
-            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>{sel.bosses.map((b, i) => <div key={i} style={{ fontSize: 9, color: "#9a3a3a", marginBottom: 2 }}>☠ {b}</div>)}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ color: sel.color, fontSize: 16, fontWeight: "bold" }}>{sel.name}</div><Badge label={sel.tier} color={TC[sel.tier]} /></div>
+            <div style={{ fontSize: 20, color: T.textDim, margin: "5px 0 7px", lineHeight: 1.5 }}>{sel.desc}</div>
+            <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>{sel.bosses.map((b, i) => <div key={i} style={{ fontSize: 17, color: "#9a3a3a", marginBottom: 2 }}>☠ {b}</div>)}</div>
           </div>
           <div style={{ marginBottom: 10 }}>
             <SL c="FILTER" s={{ marginBottom: 6 }} />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
               <Btn ch={`All (${exts.length})`} small active={fil === "all"} onClick={() => setFil("all")} />
-              {types.map(t => { const c = ET_CONFIG[t]; return <button key={t} onClick={() => setFil(t)} style={{ background: fil === t ? c.bg : "transparent", color: fil === t ? c.color : T.textDim, border: `1px solid ${fil === t ? c.border : T.border}`, padding: "4px 8px", fontSize: 8, cursor: "pointer", fontFamily: T.mono }}>{c.icon} {exts.filter(e => e.type === t).length}</button>; })}
+              {types.map(t => { const c = ET_CONFIG[t]; return <button key={t} onClick={() => setFil(t)} style={{ background: fil === t ? c.bg : "transparent", color: fil === t ? c.color : T.textDim, border: `1px solid ${fil === t ? c.border : T.border}`, padding: "4px 8px", fontSize: 16, cursor: "pointer", fontFamily: T.mono }}>{c.icon} {exts.filter(e => e.type === t).length}</button>; })}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -2155,14 +2761,14 @@ function ExtractsTab() {
               return (
                 <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderLeft: `3px solid ${c.color}`, padding: 10, opacity: dead ? 0.5 : 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ color: dead ? "#444" : T.textBright, fontSize: 12, fontWeight: "bold", flex: 1, textDecoration: dead ? "line-through" : "none" }}>{ext.name}</div>
+                    <div style={{ color: dead ? "#444" : T.textBright, fontSize: 17, fontWeight: "bold", flex: 1, textDecoration: dead ? "line-through" : "none" }}>{ext.name}</div>
                     <div style={{ background: c.border + "44", color: c.color, fontSize: 7, letterSpacing: 1, padding: "2px 6px", whiteSpace: "nowrap", marginLeft: 8 }}>{c.icon} {c.label.toUpperCase()}</div>
                   </div>
-                  <div style={{ marginTop: 5, fontSize: 10, color: dead ? "#444" : c.color, lineHeight: 1.5 }}>{ext.note}</div>
+                  <div style={{ marginTop: 5, fontSize: 20, color: dead ? "#444" : c.color, lineHeight: 1.5 }}>{ext.note}</div>
                   {ext.requireItems?.length > 0 && (
                     <div style={{ marginTop: 7, paddingTop: 6, borderTop: `1px solid ${c.border}44` }}>
-                      <div style={{ fontSize: 8, color: T.textDim, letterSpacing: 2, marginBottom: 4 }}>REQUIRED ITEMS:</div>
-                      {ext.requireItems.map(item => <div key={item} style={{ fontSize: 9, color: c.color, marginBottom: 2 }}>• {item}</div>)}
+                      <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 4 }}>REQUIRED ITEMS:</div>
+                      {ext.requireItems.map(item => <div key={item} style={{ fontSize: 17, color: c.color, marginBottom: 2 }}>• {item}</div>)}
                     </div>
                   )}
                 </div>
@@ -2171,7 +2777,7 @@ function ExtractsTab() {
           </div>
           <div style={{ marginTop: 16, padding: 10, border: `1px solid ${T.border}`, background: T.surface }}>
             <SL c={<>LEGEND<Tip text="Open extracts are always available. Key extracts need a specific key. Pay extracts cost roubles. Special extracts require items like a Red Rebel or Paracord. Co-op extracts are disabled in PvE." /></>} s={{ marginBottom: 7 }} />
-            {Object.entries(ET_CONFIG).map(([t, c]) => <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}><div style={{ width: 6, height: 6, background: c.border, flexShrink: 0 }} /><div style={{ fontSize: 10, color: c.color, width: 14 }}>{c.icon}</div><div style={{ fontSize: 9, color: t === "coop" ? "#444" : T.textDim }}>{c.label}</div></div>)}
+            {Object.entries(ET_CONFIG).map(([t, c]) => <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}><div style={{ width: 6, height: 6, background: c.border, flexShrink: 0 }} /><div style={{ fontSize: 20, color: c.color, width: 14 }}>{c.icon}</div><div style={{ fontSize: 17, color: t === "coop" ? "#444" : T.textDim }}>{c.label}</div></div>)}
           </div>
         </>}
       </div>
@@ -2194,8 +2800,8 @@ function MapsTab() {
         {section === "install" && (
           <div>
             <div style={{ background: T.surface, border: "1px solid #2a4a6a", borderLeft: "3px solid #5a9aba", padding: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: 12, color: "#5a9aba", fontWeight: "bold", marginBottom: 8 }}>Install as a native-feeling app</div>
-              <div style={{ fontSize: 10, color: T.text, lineHeight: 1.8 }}>Add this app to your home screen. Runs full-screen, appears in your app launcher — no app store required.</div>
+              <div style={{ fontSize: 17, color: "#5a9aba", fontWeight: "bold", marginBottom: 8 }}>Install as a native-feeling app</div>
+              <div style={{ fontSize: 20, color: T.text, lineHeight: 1.8 }}>Add this app to your home screen. Runs full-screen, appears in your app launcher — no app store required.</div>
             </div>
             {[
               { platform: "iPhone / iPad", color: "#8a8aba", steps: ["Open this page in Safari (must be Safari, not Chrome)", "Tap the Share icon (box with arrow pointing up)", "Scroll down and tap Add to Home Screen", "Name it Tarkov Guide and tap Add"] },
@@ -2203,12 +2809,12 @@ function MapsTab() {
               { platform: "Windows / Mac (Chrome or Edge)", color: "#c8a84b", steps: ["Open this page in Chrome or Edge", "Look for the install icon (⊕) in the address bar", "Or: ⋮ menu → Save and share → Install page as app", "Name it Tarkov Guide and click Install"] },
             ].map(({ platform, color, steps }) => (
               <div key={platform} style={{ background: T.surface, border: `1px solid ${color}33`, borderLeft: `3px solid ${color}`, padding: 12, marginBottom: 10 }}>
-                <div style={{ color, fontSize: 11, fontWeight: "bold", marginBottom: 8 }}>{platform}</div>
-                {steps.map((s, i) => <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" }}><div style={{ background: color + "22", color, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div><div style={{ fontSize: 10, color: T.text, lineHeight: 1.5 }}>{s}</div></div>)}
+                <div style={{ color, fontSize: 16, fontWeight: "bold", marginBottom: 8 }}>{platform}</div>
+                {steps.map((s, i) => <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" }}><div style={{ background: color + "22", color, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div><div style={{ fontSize: 20, color: T.text, lineHeight: 1.5 }}>{s}</div></div>)}
               </div>
             ))}
             <div style={{ background: "#0a1a0a", border: "1px solid #1a3a1a", borderLeft: "3px solid #4a9a4a", padding: 10 }}>
-              <div style={{ fontSize: 9, color: "#5dba5d", lineHeight: 1.8 }}>✓ No app store · ✓ Progress saved on device · ✓ Share codes work phone ↔ desktop · ✓ Live tarkov.dev data</div>
+              <div style={{ fontSize: 17, color: "#5dba5d", lineHeight: 1.8 }}>✓ No app store · ✓ Progress saved on device · ✓ Share codes work phone ↔ desktop · ✓ Live tarkov.dev data</div>
             </div>
           </div>
         )}
@@ -2216,11 +2822,11 @@ function MapsTab() {
           <SL c={<>INTERACTIVE MAPS — ALL SOURCES<Tip text="Quick links to the best interactive maps for each location. Open them in a second tab while planning your raid." /></>} />
           {EMAPS.map(map => (
             <div key={map.id} style={{ background: T.surface, border: `1px solid ${map.color}22`, borderLeft: `3px solid ${map.color}`, padding: 10, marginBottom: 8 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><div style={{ color: map.color, fontSize: 12, fontWeight: "bold" }}>{map.name}</div><Badge label={map.tier} color={TC[map.tier]} /></div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}><div style={{ color: map.color, fontSize: 17, fontWeight: "bold" }}>{map.name}</div><Badge label={map.tier} color={TC[map.tier]} /></div>
               <div style={{ display: "flex", gap: 6 }}>
-                <a href={map.tarkovdev} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#080d14", border: "1px solid #1a2a3a", color: "#5a8aba", padding: "8px 0", fontSize: 8, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>tarkov.dev</a>
-                <a href={map.mapgenie} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#0a1318", border: "1px solid #1a3a4a", color: "#4a7a9a", padding: "8px 0", fontSize: 8, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>mapgenie</a>
-                <a href={map.wiki} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#12100a", border: `1px solid ${map.color}33`, color: map.color, padding: "8px 0", fontSize: 8, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>wiki</a>
+                <a href={map.tarkovdev} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#080d14", border: "1px solid #1a2a3a", color: "#5a8aba", padding: "8px 0", fontSize: 16, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>tarkov.dev</a>
+                <a href={map.mapgenie} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#0a1318", border: "1px solid #1a3a4a", color: "#4a7a9a", padding: "8px 0", fontSize: 16, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>mapgenie</a>
+                <a href={map.wiki} target="_blank" rel="noreferrer" style={{ flex: 1, display: "block", background: "#12100a", border: `1px solid ${map.color}33`, color: map.color, padding: "8px 0", fontSize: 16, letterSpacing: 1, textDecoration: "none", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>wiki</a>
               </div>
             </div>
           ))}
@@ -2235,11 +2841,11 @@ function WelcomeBanner({ onDismiss }) {
   return (
     <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(7,9,11,0.96)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: T.surface, border: `1px solid ${T.borderBright}`, borderLeft: `3px solid ${T.gold}`, padding: 20, maxWidth: 340 }}>
-        <div style={{ fontSize: 9, letterSpacing: 4, color: T.gold, marginBottom: 8 }}>FIELD GUIDE v6</div>
-        <div style={{ fontSize: 15, color: T.textBright, fontWeight: "bold", marginBottom: 10 }}>Tarkov PvE Squad Guide</div>
-        <div style={{ fontSize: 11, color: T.text, lineHeight: 1.8, marginBottom: 14 }}>Each player manages their own profile. Share a code before raids — no squad secretary needed.</div>
-        {["✓ Set your name + tasks in My Profile", "✓ Copy your code → paste it in Discord", "✓ Squad tab: paste teammates' codes, select map", "✓ Pick your intended extract — item checks included", "✓ Generate route: objectives optimized, extract last", "✓ Post-raid updates only your own progress", "✓ Install as home screen app — see Maps tab"].map((t, i) => <div key={i} style={{ fontSize: 10, color: "#5dba5d", marginBottom: 4 }}>{t}</div>)}
-        <button onClick={onDismiss} style={{ width: "100%", background: T.gold, color: T.bg, border: "none", padding: "11px 0", fontSize: 10, letterSpacing: 3, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", fontWeight: "bold", marginTop: 14 }}>ENTER FIELD GUIDE</button>
+        <div style={{ fontSize: 17, letterSpacing: 4, color: T.gold, marginBottom: 8 }}>FIELD GUIDE v6</div>
+        <div style={{ fontSize: 17, color: T.textBright, fontWeight: "bold", marginBottom: 10 }}>Tarkov PvE Squad Guide</div>
+        <div style={{ fontSize: 16, color: T.text, lineHeight: 1.8, marginBottom: 14 }}>Each player manages their own profile. Share a code before raids — no squad secretary needed.</div>
+        {["✓ Set your name + tasks in My Profile", "✓ Copy your code → paste it in Discord", "✓ Squad tab: paste teammates' codes, select map", "✓ Pick your intended extract — item checks included", "✓ Generate route: objectives optimized, extract last", "✓ Post-raid updates only your own progress", "✓ Install as home screen app — see Maps tab"].map((t, i) => <div key={i} style={{ fontSize: 20, color: "#5dba5d", marginBottom: 4 }}>{t}</div>)}
+        <button onClick={onDismiss} style={{ width: "100%", background: T.gold, color: T.bg, border: "none", padding: "11px 0", fontSize: 20, letterSpacing: 3, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", fontWeight: "bold", marginTop: 14 }}>ENTER FIELD GUIDE</button>
       </div>
     </div>
   );
@@ -2248,8 +2854,8 @@ function WelcomeBanner({ onDismiss }) {
 function BottomNav({ tab, setTab }) {
   const items = [{ id: "profile", label: "My Profile", icon: "▲" }, { id: "squad", label: "Squad", icon: "◈" }, { id: "extracts", label: "Extracts", icon: "⬆" }, { id: "maps", label: "Maps", icon: "🗺" }];
   return (
-    <div style={{ display: "flex", borderTop: `1px solid ${T.borderBright}`, background: T.surface, flexShrink: 0 }}>
-      {items.map(item => <button key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "8px 2px 6px", background: tab === item.id ? "#0f1a0f" : "transparent", border: "none", cursor: "pointer", borderTop: `2px solid ${tab === item.id ? T.gold : "transparent"}` }}><span style={{ fontSize: 13, marginBottom: 2 }}>{item.icon}</span><span style={{ fontSize: 6, letterSpacing: 1, fontFamily: T.mono, textTransform: "uppercase", color: tab === item.id ? T.gold : T.textDim }}>{item.label}</span></button>)}
+    <div style={{ display: "flex", borderTop: `2px solid ${T.borderBright}`, background: T.surface, flexShrink: 0 }}>
+      {items.map(item => <button key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 4px 10px", background: tab === item.id ? "#0f1a0f" : "transparent", border: "none", cursor: "pointer", borderTop: `3px solid ${tab === item.id ? T.gold : "transparent"}`, transition: "background 0.15s" }}><span style={{ fontSize: 20, marginBottom: 4 }}>{item.icon}</span><span style={{ fontSize: 16, letterSpacing: 2, fontWeight: tab === item.id ? "bold" : "normal", fontFamily: T.mono, textTransform: "uppercase", color: tab === item.id ? T.gold : T.textDim }}>{item.label}</span></button>)}
     </div>
   );
 }
@@ -2285,21 +2891,17 @@ export default function TarkovGuide() {
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => { if (profileReady && !welcomed) setShowWelcome(true); }, [profileReady, welcomed]);
 
-  // Scale factor: at 480px viewport the app renders at 1x, scales up linearly to fill wider screens
-  const [winW, setWinW] = useState(window.innerWidth);
-  useEffect(() => { const h = () => setWinW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
-  const scale = Math.max(1, Math.min(winW / 480, 2.5));
-
   return (
-    <div style={{ height: `${100 / scale}vh`, background: T.bg, color: T.text, fontFamily: T.mono, maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative", zoom: scale }}>
+    <div style={{ height: "100vh", width: "100%", display: "flex", justifyContent: "center", background: "#000" }}>
+    <div style={{ height: "100%", width: "100%", maxWidth: 960, background: T.bg, color: T.text, fontFamily: T.mono, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {showWelcome && <WelcomeBanner onDismiss={() => { setShowWelcome(false); saveWelcomed(true); }} />}
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.borderBright}`, padding: "10px 14px 8px", flexShrink: 0 }}>
-        <div style={{ fontSize: 8, letterSpacing: 4, color: T.textDim, marginBottom: 2 }}>PvE FIELD REFERENCE</div>
+        <div style={{ fontSize: 16, letterSpacing: 4, color: T.textDim, marginBottom: 2 }}>PvE FIELD REFERENCE</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 17, fontWeight: "bold", color: T.gold, letterSpacing: 3 }}>TARKOV GUIDE</div>
+          <div style={{ fontSize: 22, fontWeight: "bold", color: T.gold, letterSpacing: 3 }}>TARKOV GUIDE</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {myProfile.name && <div style={{ fontSize: 9, color: myProfile.color, fontFamily: T.mono }}>{myProfile.name}</div>}
-            <div style={{ fontSize: 8, color: apiError ? "#6a2a2a" : "#2a5a2a", display: "flex", alignItems: "center", gap: 4 }}>
+            {myProfile.name && <div style={{ fontSize: 17, color: myProfile.color, fontFamily: T.mono }}>{myProfile.name}</div>}
+            <div style={{ fontSize: 16, color: apiError ? "#6a2a2a" : "#2a5a2a", display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: apiError ? "#8a3a3a" : "#3a8a3a" }} />
               {apiError ? "OFFLINE" : "LIVE DATA"}
             </div>
@@ -2313,6 +2915,7 @@ export default function TarkovGuide() {
         {tab === "maps" && <MapsTab />}
       </div>
       <BottomNav tab={tab} setTab={setTab} />
+    </div>
     </div>
   );
 }
