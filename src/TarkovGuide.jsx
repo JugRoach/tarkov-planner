@@ -2284,32 +2284,88 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           </div>
         )}
 
-        {/* Other recommended maps */}
-        {quickRec.length > 1 && (
+        {/* Pick any map */}
+        {apiMaps && (
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>OTHER MAPS WITH TASKS:</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {quickRec.slice(1, 4).map(rec => (
-                <button key={rec.mapId} onClick={() => {
-                  setSelectedMapId(rec.mapId);
-                  setFaction("pmc");
-                  setRouteMode("tasks");
-                  const qIds = new Set([myProfile.id]);
-                  if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
-                  setActiveIds(qIds);
-                  setPriorityTasks(computeQuickTasks(allProfiles, rec.mapId, apiTasks, tasksPerPerson));
-                  setExtractChoices({});
-                  setQuickGenPending(true);
-                }} style={{ flex: 1, minWidth: 100, background: "#0a0d10", border: `1px solid ${T.border}`, padding: "8px 6px", fontSize: 16, color: T.textDim, fontFamily: T.mono, cursor: "pointer", textAlign: "center" }}>
-                  {rec.mapName}<br /><span style={{ fontSize: 14, color: T.gold }}>{rec.totalTasks} task{rec.totalTasks !== 1 ? "s" : ""}</span>
-                </button>
-              ))}
+            <div style={{ fontSize: 16, color: T.textDim, letterSpacing: 2, marginBottom: 6 }}>OR PICK A MAP:</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 5 }}>
+              {apiMaps.map(m => {
+                const rec = quickRec.find(r => r.mapId === m.id);
+                const taskCount = rec ? rec.totalTasks : 0;
+                const isTop = quickTopMap && quickTopMap.mapId === m.id;
+                return (
+                  <button key={m.id} onClick={() => {
+                    setSelectedMapId(m.id);
+                    setFaction("pmc");
+                    setRouteMode("tasks");
+                    const qIds = new Set([myProfile.id]);
+                    if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                    setActiveIds(qIds);
+                    setPriorityTasks(computeQuickTasks(allProfiles, m.id, apiTasks, tasksPerPerson));
+                    setExtractChoices({});
+                    setQuickGenPending(true);
+                  }} style={{ background: isTop ? T.gold + "15" : "#0a0d10", border: `1px solid ${isTop ? T.gold + "66" : T.border}`, color: isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textAlign: "center", textTransform: "uppercase" }}>
+                    {m.name}
+                    {taskCount > 0 && <div style={{ fontSize: 14, color: T.gold, marginTop: 2 }}>{taskCount} task{taskCount !== 1 ? "s" : ""}</div>}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* Loot Run shortcut */}
-        <button onClick={() => { setRouteMode("loot"); setPlannerView("full"); }} style={{ width: "100%", background: "#9a8aba11", border: `1px solid #9a8aba44`, padding: "10px 0", fontSize: 17, color: "#9a8aba", fontFamily: T.mono, letterSpacing: 2, cursor: "pointer", marginBottom: 14 }}>◈ LOOT RUN MODE</button>
+        {/* Loot Run section */}
+        {apiMaps && (() => {
+          // Find best loot map (most loot points)
+          let bestLootId = null, bestLootCount = 0;
+          apiMaps.forEach(m => {
+            const count = EMAPS.find(e => e.id === m.normalizedName)?.lootPoints?.length || 0;
+            if (count > bestLootCount) { bestLootCount = count; bestLootId = m.id; }
+          });
+          // Find hideout-recommended map if target is set
+          let hideoutLootId = null;
+          if (hideoutTarget && apiHideout) {
+            const station = apiHideout.find(s => s.id === hideoutTarget.stationId);
+            const level = station?.levels.find(l => l.level === hideoutTarget.level);
+            if (level) {
+              const neededItems = level.itemRequirements.filter(r => r.item.name !== "Roubles").map(r => ({ id: r.item.id, name: r.item.name, shortName: r.item.shortName, count: r.count }));
+              const itemRanked = computeItemRecommendation(neededItems, apiMaps);
+              hideoutLootId = itemRanked[0]?.mapId || null;
+            }
+          }
+          return (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 16, color: "#9a8aba", letterSpacing: 2, marginBottom: 8 }}>◈ LOOT RUN<Tip text="Pick a map to run a loot route — hits all key loot spots. Use CUSTOMIZE in the full planner to filter by hideout or equipment needs." /></div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 5 }}>
+                {apiMaps.map(m => {
+                  const emapData = EMAPS.find(e => e.id === m.normalizedName);
+                  const lootCount = emapData?.lootPoints?.length || 0;
+                  const isTopLoot = m.id === bestLootId;
+                  const isHideoutRec = m.id === hideoutLootId && hideoutLootId !== bestLootId;
+                  const accent = isTopLoot ? "#9a8aba" : isHideoutRec ? "#4ababa" : null;
+                  return (
+                    <button key={m.id} onClick={() => {
+                      setSelectedMapId(m.id);
+                      setFaction("pmc");
+                      setRouteMode("loot");
+                      setLootSubMode("all");
+                      const qIds = new Set([myProfile.id]);
+                      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                      setActiveIds(qIds);
+                      setExtractChoices({});
+                      setQuickGenPending(true);
+                    }} style={{ background: accent ? accent + "15" : "#0a0d10", border: `1px solid ${accent ? accent + "66" : "#9a8aba33"}`, color: accent || T.textDim, padding: "8px 4px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textAlign: "center", textTransform: "uppercase" }}>
+                      {m.name}
+                      {isTopLoot && <div style={{ fontSize: 14, color: "#9a8aba", marginTop: 2 }}>★ BEST LOOT</div>}
+                      {isHideoutRec && <div style={{ fontSize: 14, color: "#4ababa", marginTop: 2 }}>◈ HIDEOUT</div>}
+                      {!isTopLoot && !isHideoutRec && lootCount > 0 && <div style={{ fontSize: 14, color: "#9a8aba66", marginTop: 2 }}>{lootCount} spot{lootCount !== 1 ? "s" : ""}</div>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -2718,8 +2774,8 @@ function ExtractsTab() {
           {["extracts", "roadmap"].map(v => <Btn key={v} ch={v} onClick={() => setSv(v)} active={sv === v} />)}
         </div>
         {sv === "extracts" && <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 4, paddingBottom: 10 }}>
-            {EMAPS.map(m => <button key={m.id} onClick={() => { setSel(m); setFil("all"); }} style={{ background: sel.id === m.id ? m.color + "22" : "transparent", border: `1px solid ${sel.id === m.id ? m.color : T.border}`, color: sel.id === m.id ? m.color : T.textDim, padding: "5px 4px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center" }}>{m.name}</button>)}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 4, paddingBottom: 10 }}>
+            {EMAPS.map(m => <button key={m.id} onClick={() => { setSel(m); setFil("all"); }} style={{ background: sel.id === m.id ? m.color + "22" : "transparent", border: `1px solid ${sel.id === m.id ? m.color : T.border}`, color: sel.id === m.id ? m.color : T.textDim, padding: "5px 4px", fontSize: 16, cursor: "pointer", fontFamily: T.mono, textTransform: "uppercase", textAlign: "center", wordBreak: "break-word" }}>{m.name}</button>)}
           </div>
           <div style={{ display: "flex", marginBottom: 10, border: `1px solid ${T.border}` }}>
             {["pmc", "scav"].map(f => <button key={f} onClick={() => { setFac(f); setFil("all"); }} style={{ flex: 1, background: fac === f ? (f === "pmc" ? "#0a1520" : "#0a1a0a") : "transparent", color: fac === f ? (f === "pmc" ? "#5ab0d0" : "#5dba5d") : T.textDim, border: "none", padding: 7, fontSize: 17, letterSpacing: 3, cursor: "pointer", textTransform: "uppercase", fontFamily: T.mono, fontWeight: "bold" }}>{f === "pmc" ? "▲ PMC" : "◆ SCAV"}</button>)}
