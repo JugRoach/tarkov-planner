@@ -527,6 +527,27 @@ function computeQuickTasks(profiles, mapId, apiTasks, tasksPerPerson) {
   return result;
 }
 
+// Convert item name to loot-point category tags via heuristics (for items without API categories)
+function itemNameToCategories(name) {
+  const cats = [];
+  const n = (name || "").toLowerCase();
+  if (n.includes("gpu") || n.includes("graphics") || n.includes("circuit") || n.includes("wire") || n.includes("relay") || n.includes("tetriz") || n.includes("vpx") || n.includes("flash drive") || n.includes("ssd") || n.includes("phase") || n.includes("capacitor") || n.includes("cable") || n.includes("processor")) cats.push("Electronics");
+  if (n.includes("ledx") || n.includes("ophthalmoscope") || n.includes("defib") || n.includes("salewa") || n.includes("medic") || n.includes("surv12") || n.includes("cms") || n.includes("vaseline")) cats.push("Medical supplies");
+  if (n.includes("salewa") || n.includes("grizzly") || n.includes("ifak") || n.includes("afak") || n.includes("cms") || n.includes("surv")) cats.push("Meds");
+  if (n.includes("stim") || n.includes("propital") || n.includes("etg") || n.includes("sj")) cats.push("Stimulant");
+  if (n.includes("bolt") || n.includes("screw") || n.includes("nail") || n.includes("duct tape") || n.includes("insulating") || n.includes("bulb") || n.includes("cable") || n.includes("capacitor")) cats.push("Building material");
+  if (n.includes("wrench") || n.includes("plier") || n.includes("screwdriver") || n.includes("multitool")) cats.push("Tool");
+  if (n.includes("hose") || n.includes("pipe") || n.includes("motor") || n.includes("filter") || n.includes("tube") || n.includes("corrugated")) cats.push("Household goods");
+  if (n.includes("fuel") || n.includes("propane") || n.includes("expeditionary")) cats.push("Fuel");
+  if (n.includes("weapon") || n.includes("gun") || n.includes("rifle") || n.includes("pistol") || n.includes("ak-") || n.includes("m4a1")) cats.push("Weapon");
+  if (n.includes("intel") || n.includes("folder") || n.includes("diary") || n.includes("sas drive")) cats.push("Info");
+  if (n.includes("key") && !n.includes("keyboard")) cats.push("Key");
+  if (n.includes("gold") || n.includes("bitcoin") || n.includes("lion") || n.includes("cat figurine") || n.includes("horse") || n.includes("chain") || n.includes("roler")) cats.push("Jewelry");
+  if (n.includes("battery") || n.includes("military") || n.includes("gyro") || n.includes("power")) cats.push("Electronics");
+  if (cats.length === 0) { cats.push("Barter item"); cats.push("Building material"); }
+  return [...new Set(cats)].map(c => ({ name: c }));
+}
+
 // Container type → item keyword affinity for scoring
 const CONTAINER_AFFINITY = {
   "PC block": ["circuit","cpu","fan","ram","ssd","hdd","flash","drive","wire","cable","capacitor","processor","graphics","board"],
@@ -1882,7 +1903,7 @@ function useSquadRoom(myProfile) {
 }
 
 // ─── SQUAD TAB ────────────────────────────────────────────────────────────
-function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiError, hideoutTarget, apiHideout }) {
+function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiError, hideoutTarget, apiHideout, hideoutLevels }) {
   const [importCode, setImportCode] = useState("");
   const [importError, setImportError] = useState("");
   const [importedSquad, saveImportedSquad] = useStorage("tg-squad-v3", []);
@@ -1907,6 +1928,12 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   const [plannerView, setPlannerView] = useState("quick"); // "quick" or "full"
   const [squadExpanded, setSquadExpanded] = useState(false);
   const [quickGenPending, setQuickGenPending] = useState(false);
+  const [qhStation, setQhStation] = useState(null); // quick hideout: selected station id
+  const [qhLevel, setQhLevel] = useState(null); // quick hideout: selected level number
+  const [qhItem, setQhItem] = useState(null); // quick hideout: selected item {id, name, shortName, count}
+  const [qiSearch, setQiSearch] = useState(""); // quick item search term
+  const [qiResults, setQiResults] = useState(null); // quick item search results
+  const [qiSearching, setQiSearching] = useState(false);
 
   const searchEquipment = async (term) => {
     if (!term || term.length < 2) { setEquipResults(null); return; }
@@ -1916,6 +1943,29 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
       setEquipResults(data?.items || []);
     } catch(e) { setEquipResults([]); }
     setEquipSearching(false);
+  };
+
+  // Score loot points by tag relevance, return top 3 — exact tag matches score 3, "Barter item" gets 1
+  const LOOT_TYPE_BONUS = { "high-value": 2, tech: 2, medical: 1, mixed: 0, stash: 0 };
+  const rankLootPoints = (lootPoints, neededTags) => {
+    if (!lootPoints?.length || !neededTags?.size) return lootPoints;
+    const scored = lootPoints.map(lp => {
+      const tags = lp.tags || [];
+      let score = 0;
+      tags.forEach(t => { if (neededTags.has(t)) score += 3; });
+      score += (LOOT_TYPE_BONUS[lp.type] || 0);
+      return { lp, score };
+    });
+    scored.sort((a, b) => b.score - a.score);
+    // Take top 3 — but only include nodes with some relevance (score > 0)
+    const top = scored.filter(s => s.score > 0).slice(0, 3);
+    // If fewer than 3 matched, fill with best remaining general loot points
+    if (top.length < 3) {
+      const used = new Set(top.map(s => s.lp.name));
+      const rest = scored.filter(s => !used.has(s.lp.name)).slice(0, 3 - top.length);
+      top.push(...rest);
+    }
+    return top.map(s => s.lp);
   };
 
   // Compute filtered loot points based on sub-mode — uses tags for precise matching
@@ -1945,7 +1995,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           // If nothing matched, add broad tags
           if (neededTags.size === 0) { neededTags.add("Barter item"); neededTags.add("Building material"); }
         });
-        return lootPoints.filter(lp => (lp.tags || []).some(t => neededTags.has(t)));
+        return rankLootPoints(lootPoints, neededTags);
       }
     }
     if (lootSubMode === "equipment" && targetEquipment.length > 0) {
@@ -1958,7 +2008,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
           }
         });
       });
-      return lootPoints.filter(lp => (lp.tags || []).some(t => neededTags.has(t)));
+      return rankLootPoints(lootPoints, neededTags);
     }
     return lootPoints;
   };
@@ -2366,6 +2416,168 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
             </div>
           );
         })()}
+
+        {/* Hideout Item Finder */}
+        {apiHideout && apiMaps && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 16, color: "#4ababa", letterSpacing: 2, marginBottom: 8 }}>◈ FIND HIDEOUT ITEM<Tip text="Pick a hideout station, level, and specific item. We'll find the best map to look for it and generate a loot run." /></div>
+            <div style={{ background: T.surface, border: `1px solid #4ababa33`, padding: 10 }}>
+              {/* Station picker */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: qhStation ? 8 : 0 }}>
+                {apiHideout.filter(s => s.levels.length > 0).sort((a, b) => a.name.localeCompare(b.name)).map(s => {
+                  const curLv = (hideoutLevels || {})[s.id] || 0;
+                  const maxLv = Math.max(...s.levels.map(l => l.level));
+                  const isMaxed = curLv >= maxLv;
+                  const isSel = qhStation === s.id;
+                  const isTarget = hideoutTarget?.stationId === s.id;
+                  return (
+                    <button key={s.id} onClick={() => { setQhStation(isSel ? null : s.id); setQhLevel(null); setQhItem(null); }}
+                      style={{ display: "flex", alignItems: "center", gap: 4, background: isSel ? "#4ababa22" : isTarget ? "#ba8a4a18" : "transparent", border: `1px solid ${isSel ? "#4ababa" : isTarget ? "#ba8a4a" : isMaxed ? "#2a4a2a" : T.border}`, color: isSel ? "#4ababa" : isTarget ? "#ba8a4a" : isMaxed ? "#4a8a4a" : T.textDim, padding: "4px 8px", fontSize: 14, fontFamily: T.mono, cursor: "pointer", opacity: isMaxed && !isTarget ? 0.6 : 1 }}>
+                      {isTarget && !isSel ? "◈ " : ""}{s.name}
+                      <span style={{ fontSize: 11, color: isMaxed ? "#4a8a4a" : isTarget && !isSel ? "#ba8a4a" : isSel ? "#4ababa" : T.textDim, background: isMaxed ? "#2a4a2a44" : isSel ? "#4ababa22" : "#ffffff08", padding: "1px 4px", borderRadius: 2 }}>{isMaxed ? "MAX" : `Lv${curLv}`}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Level picker */}
+              {qhStation && (() => {
+                const station = apiHideout.find(s => s.id === qhStation);
+                if (!station) return null;
+                return (
+                  <>
+                    {(() => { const curLv = (hideoutLevels || {})[qhStation] || 0; return (
+                    <div style={{ display: "flex", gap: 4, alignItems: "center", marginBottom: qhLevel ? 8 : 0 }}>
+                      <span style={{ fontSize: 13, color: T.textDim, marginRight: 2 }}>Your level: <span style={{ color: "#4ababa" }}>{curLv}</span></span>
+                      {station.levels.map(l => {
+                        const isBuilt = l.level <= curLv;
+                        const isNext = l.level === curLv + 1;
+                        const isSel = qhLevel === l.level;
+                        const isTargetLv = hideoutTarget?.stationId === qhStation && hideoutTarget?.level === l.level;
+                        return (
+                          <button key={l.level} onClick={() => { if (isBuilt) return; setQhLevel(isSel ? null : l.level); setQhItem(null); }}
+                            style={{ background: isSel ? "#4ababa22" : isTargetLv ? "#ba8a4a22" : isBuilt ? "#2a4a2a33" : isNext ? "#4ababa0a" : "transparent", border: `1px solid ${isSel ? "#4ababa" : isTargetLv ? "#ba8a4a" : isBuilt ? "#2a4a2a" : isNext ? "#4ababa55" : T.border}`, color: isSel ? "#4ababa" : isTargetLv ? "#ba8a4a" : isBuilt ? "#4a8a4a" : isNext ? "#4ababa" : T.textDim, padding: "4px 10px", fontSize: 16, fontFamily: T.mono, cursor: isBuilt ? "default" : "pointer", opacity: isBuilt ? 0.5 : 1, fontWeight: isNext || isTargetLv ? "bold" : "normal" }}>{isBuilt ? "✓ " : isTargetLv ? "◈ " : ""}Lv {l.level}</button>
+                        );
+                      })}
+                    </div>
+                    ); })()}
+                    {/* Item picker */}
+                    {qhLevel && (() => {
+                      const level = station.levels.find(l => l.level === qhLevel);
+                      const items = (level?.itemRequirements || []).filter(r => r.item.name !== "Roubles");
+                      if (!items.length) return <div style={{ fontSize: 16, color: T.textDim }}>No items needed for this level.</div>;
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {items.map(r => {
+                            const isSel = qhItem?.id === r.item.id;
+                            return (
+                              <button key={r.item.id} onClick={() => setQhItem(isSel ? null : { id: r.item.id, name: r.item.name, shortName: r.item.shortName, count: r.count })}
+                                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: isSel ? "#4ababa22" : "transparent", border: `1px solid ${isSel ? "#4ababa" : T.border}`, padding: "6px 10px", cursor: "pointer", textAlign: "left" }}>
+                                <span style={{ fontSize: 17, color: isSel ? "#4ababa" : T.textBright, fontFamily: T.mono }}>{isSel ? "★ " : ""}{r.item.name}</span>
+                                <span style={{ fontSize: 16, color: isSel ? "#4ababa" : T.textDim, fontFamily: T.mono }}>×{r.count}</span>
+                              </button>
+                            );
+                          })}
+                          {qhItem && (() => {
+                            const ranked = computeItemRecommendation([qhItem], apiMaps);
+                            const top3 = ranked.slice(0, 3);
+                            if (!top3.length) return null;
+                            const topScore = top3[0].score;
+                            const itemLabel = qhItem.shortName || qhItem.name.split(" ").slice(0, 2).join(" ");
+                            return (
+                              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                                <div style={{ fontSize: 13, color: T.textDim, letterSpacing: 2, marginBottom: 2 }}>BEST MAPS FOR {itemLabel.toUpperCase()}</div>
+                                {top3.map((m, i) => {
+                                  const pct = topScore > 0 ? Math.round((m.score / topScore) * 100) : 0;
+                                  return (
+                                    <button key={m.mapId} onClick={() => {
+                                      setSelectedMapId(m.mapId);
+                                      setFaction("pmc");
+                                      setRouteMode("loot");
+                                      setLootSubMode("equipment");
+                                      saveTargetEquipment([{ ...qhItem, categories: itemNameToCategories(qhItem.name) }]);
+                                      const qIds = new Set([myProfile.id]);
+                                      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                                      setActiveIds(qIds);
+                                      setExtractChoices({});
+                                      setQuickGenPending(true);
+                                    }} style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "space-between", background: "transparent", border: `1px solid ${i === 0 ? "#4ababa" : T.border}`, padding: "8px 10px", cursor: "pointer", textAlign: "left", overflow: "hidden" }}>
+                                      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: i === 0 ? "#4ababa15" : "#4ababa08", transition: "width 0.3s" }} />
+                                      <span style={{ position: "relative", display: "flex", alignItems: "center", gap: 6, fontSize: 17, color: i === 0 ? "#4ababa" : T.textBright, fontFamily: T.mono, fontWeight: i === 0 ? "bold" : "normal" }}>
+                                        <span style={{ fontSize: 13, color: i === 0 ? "#4ababa" : T.textDim, minWidth: 16 }}>{i === 0 ? "★" : `#${i + 1}`}</span>
+                                        {m.mapName}
+                                      </span>
+                                      <span style={{ position: "relative", fontSize: 13, color: i === 0 ? "#4ababa" : T.textDim, fontFamily: T.mono }}>{m.totalContainers} containers · {pct}%</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      );
+                    })()}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Quick Item Search */}
+        {apiMaps && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 16, color: T.orange, letterSpacing: 2, marginBottom: 8 }}>⚡ FIND ANY ITEM<Tip text="Search for any item by name. We'll find the best map to look for it and generate a loot run." /></div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <input value={qiSearch} onChange={e => setQiSearch(e.target.value)} placeholder="Search item name..."
+                onKeyDown={e => {
+                  if (e.key === "Enter" && qiSearch.length >= 2) {
+                    setQiSearching(true);
+                    fetchAPI(`{items(lang:en,name:"${qiSearch.replace(/"/g, '\\"')}"){id name shortName categories{name}}}`).then(d => {
+                      setQiResults((d?.items || []).slice(0, 8));
+                      setQiSearching(false);
+                    }).catch(() => { setQiResults([]); setQiSearching(false); });
+                  }
+                }}
+                style={{ ...T.input, flex: 1, fontSize: 16 }} />
+              <button onClick={() => {
+                if (qiSearch.length < 2) return;
+                setQiSearching(true);
+                fetchAPI(`{items(lang:en,name:"${qiSearch.replace(/"/g, '\\"')}"){id name shortName categories{name}}}`).then(d => {
+                  setQiResults((d?.items || []).slice(0, 8));
+                  setQiSearching(false);
+                }).catch(() => { setQiResults([]); setQiSearching(false); });
+              }} style={{ background: qiSearch.length >= 2 ? T.orange + "22" : "transparent", border: `1px solid ${qiSearch.length >= 2 ? T.orange : T.border}`, color: qiSearch.length >= 2 ? T.orange : T.textDim, padding: "8px 14px", fontSize: 16, fontFamily: T.mono, cursor: qiSearch.length >= 2 ? "pointer" : "default" }}>SEARCH</button>
+            </div>
+            {qiSearching && <div style={{ fontSize: 16, color: T.textDim, marginTop: 6 }}>Searching...</div>}
+            {qiResults && !qiSearching && (
+              <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
+                {qiResults.length === 0 && <div style={{ fontSize: 16, color: T.textDim }}>No items found.</div>}
+                {qiResults.map(item => {
+                  const ranked = computeItemRecommendation([{ id: item.id, name: item.name, shortName: item.shortName, count: 1 }], apiMaps);
+                  const bestMap = ranked[0];
+                  return (
+                    <button key={item.id} onClick={() => {
+                      if (!bestMap) return;
+                      setSelectedMapId(bestMap.mapId);
+                      setFaction("pmc");
+                      setRouteMode("loot");
+                      setLootSubMode("equipment");
+                      saveTargetEquipment([{ id: item.id, name: item.name, shortName: item.shortName, categories: item.categories, count: 1 }]);
+                      const qIds = new Set([myProfile.id]);
+                      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                      setActiveIds(qIds);
+                      setExtractChoices({});
+                      setQuickGenPending(true);
+                    }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.surface, border: `1px solid ${T.border}`, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>
+                      <span style={{ fontSize: 17, color: T.textBright, fontFamily: T.mono }}>{item.name}</span>
+                      {bestMap && <span style={{ fontSize: 14, color: T.orange, fontFamily: T.mono, whiteSpace: "nowrap", marginLeft: 8 }}>→ {bestMap.mapName}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2966,7 +3178,7 @@ export default function TarkovGuide() {
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {tab === "profile" && <MyProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} />}
-        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} />}
+        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} />}
         {tab === "extracts" && <ExtractsTab />}
         {tab === "maps" && <MapsTab />}
       </div>
