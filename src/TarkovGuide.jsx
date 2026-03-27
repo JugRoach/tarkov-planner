@@ -37,7 +37,7 @@ function useStorage(key,def){const[val,setVal]=useState(def);const[ready,setRead
 
 // ─── API ─────────────────────────────────────────────────────────────────
 const MAPS_Q=`{maps{id name normalizedName lootContainers{lootContainer{name}}}}`;
-const TASKS_Q=`{tasks(lang:en){id name minPlayerLevel trader{name} map{id name normalizedName} taskRequirements{task{id}status} objectives{id type description optional ...on TaskObjectiveBasic{zones{id map{id} position{x y z}}} ...on TaskObjectiveMark{markerItem{name} zones{id map{id} position{x y z}}} ...on TaskObjectiveQuestItem{questItem{name} count possibleLocations{map{id} positions{x y z}} zones{id map{id} position{x y z}}} ...on TaskObjectiveShoot{targetNames count zoneNames zones{id map{id} position{x y z}}} ...on TaskObjectiveItem{items{name} count foundInRaid zones{id map{id} position{x y z}}} ...on TaskObjectiveExtract{exitName}}}}`;
+const TASKS_Q=`{tasks(lang:en){id name wikiLink minPlayerLevel trader{name} map{id name normalizedName} taskRequirements{task{id}status} objectives{id type description optional ...on TaskObjectiveBasic{zones{id map{id} position{x y z}}} ...on TaskObjectiveMark{markerItem{name} zones{id map{id} position{x y z}}} ...on TaskObjectiveQuestItem{questItem{name} count possibleLocations{map{id} positions{x y z}} zones{id map{id} position{x y z}}} ...on TaskObjectiveShoot{targetNames count zoneNames zones{id map{id} position{x y z}}} ...on TaskObjectiveItem{items{name} count foundInRaid zones{id map{id} position{x y z}}} ...on TaskObjectiveExtract{exitName}}}}`;
 const HIDEOUT_Q=`{hideoutStations{id name normalizedName levels{level itemRequirements{item{id name shortName} count} stationLevelRequirements{station{id name} level} traderRequirements{trader{name} level}}}}`;
 const TRADERS_Q=`{traders{id name imageLink}}`;
 async function fetchAPI(q){const r=await fetch(API_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:q})});return(await r.json()).data;}
@@ -1572,13 +1572,13 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
               )}
             </div>
           )}
-          <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}</div>
+          <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}<Tip text="Tap the ↗ icon next to any task name to open its wiki page for detailed walkthroughs and tips." /></div>
           {browseTasks.map(task => {
             const added = myProfile.tasks?.some(t => t.taskId === task.id);
             return (
               <div key={task.id} style={{ background: T.surface, border: `1px solid ${added ? myProfile.color : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : T.border}`, padding: 10, marginBottom: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                  <div style={{ color: T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1 }}>{task.name}</div>
+                  <div style={{ color: T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
                   <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
@@ -1720,7 +1720,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                         <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
                           <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                             <div style={{ flex: 1 }}>
-                              <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none" }}>{apiTask.name}</div>
+                              <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
                               <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                                 {apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
                                 <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
