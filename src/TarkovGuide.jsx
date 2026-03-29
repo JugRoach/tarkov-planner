@@ -283,6 +283,7 @@ const EMAPS = [
     {name:"Techlight",type:"tech",pct:{x:0.52,y:0.3},note:"GPUs, Tetriz, electronics — top-tier tech loot",tags:["Electronics","Info"]},
     {name:"Rasmussen",type:"tech",pct:{x:0.48,y:0.35},note:"Electronics, barter items, tech spawns",tags:["Electronics","Barter item"]},
     {name:"KIBA Store",type:"high-value",pct:{x:0.55,y:0.42},note:"Weapons, attachments — requires 2 KIBA keys",tags:["Weapon","Weapon mod","Ammo"]},
+    {name:"Goshan (grocery store)",type:"mixed",pct:{x:0.42,y:0.55},note:"Food, drinks, rations — best food loot on Interchange",tags:["Food","Food and drink","Drink","Barter item"]},
     {name:"OLI (back shelves)",type:"mixed",pct:{x:0.6,y:0.6},note:"Fuel, motors, hoses, hideout materials",tags:["Fuel","Building material","Tool","Household goods"]},
     {name:"IDEA Office",type:"mixed",pct:{x:0.3,y:0.45},note:"PCs, filing cabinets, office loot",tags:["Electronics","Info","Barter item"]},
     {name:"EMERCOM Medical",type:"medical",pct:{x:0.75,y:0.72},note:"Medical supplies, stims, LEDX chance",tags:["Meds","Medical supplies","Stimulant"]},
@@ -400,6 +401,7 @@ const EMAPS = [
     {name:"TerraGroup Building",type:"tech",pct:{x:0.38,y:0.6},note:"Tech loot, PCs, server racks",tags:["Electronics","Info"]},
     {name:"Cardinal Hotel",type:"mixed",pct:{x:0.85,y:0.18},note:"Multiple floors, weapon spawns, safes",tags:["Weapon","Jewelry","Money","Key","Meds"]},
     {name:"Pinewood Hotel",type:"mixed",pct:{x:0.3,y:0.3},note:"Safes, loose loot, jackets",tags:["Jewelry","Money","Key","Barter item"]},
+    {name:"Sparja / Tarkone Shops",type:"mixed",pct:{x:0.62,y:0.42},note:"Grocery and convenience stores — food, drinks, rations",tags:["Food","Food and drink","Drink","Barter item","Meds"]},
     {name:"Underground Parking",type:"stash",pct:{x:0.5,y:0.7},note:"Weapon crates, duffle bags, stashes",tags:["Weapon","Barter item","Building material","Tool"]},
    ],
    pmcExtracts:[
@@ -2264,6 +2266,8 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   const [qiSearch, setQiSearch] = useState(""); // quick item search term
   const [qiResults, setQiResults] = useState(null); // quick item search results
   const [qiSearching, setQiSearching] = useState(false);
+  const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
+  const qiDebounce = useRef(null);
 
   const searchEquipment = async (term) => {
     if (!term || term.length < 2) { setEquipResults(null); return; }
@@ -2276,14 +2280,17 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   };
 
   // Score loot points by tag relevance, return top 3 — exact tag matches score 3, "Barter item" gets 1
-  const LOOT_TYPE_BONUS = { "high-value": 2, tech: 2, medical: 1, mixed: 0, stash: 0 };
   const rankLootPoints = (lootPoints, neededTags) => {
     if (!lootPoints?.length || !neededTags?.size) return lootPoints;
+    // Compute preferred loot point types from needed tags via CAT_TO_LOOT
+    const preferredTypes = new Set();
+    neededTags.forEach(tag => { (CAT_TO_LOOT[tag] || []).forEach(t => preferredTypes.add(t)); });
     const scored = lootPoints.map(lp => {
       const tags = lp.tags || [];
       let score = 0;
       tags.forEach(t => { if (neededTags.has(t)) score += 3; });
-      score += (LOOT_TYPE_BONUS[lp.type] || 0);
+      // Type bonus: prefer loot point types matching the item's categories
+      score += preferredTypes.has(lp.type) ? 2 : 0;
       return { lp, score };
     });
     scored.sort((a, b) => b.score - a.score);
@@ -2856,28 +2863,21 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
         {/* Quick Item Search */}
         {apiMaps && (
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: T.fs2, color: T.orange, letterSpacing: 1, marginBottom: 8 }}>⚡ FIND ANY ITEM<Tip text="Search for any item by name. We'll find the best map to look for it and generate a loot run." /></div>
-            <div style={{ display: "flex", gap: 6 }}>
-              <input value={qiSearch} onChange={e => setQiSearch(e.target.value)} placeholder="Search item name..."
-                onKeyDown={e => {
-                  if (e.key === "Enter" && qiSearch.length >= 2) {
-                    setQiSearching(true);
-                    fetchAPI(`{items(lang:en,name:"${qiSearch.replace(/"/g, '\\"')}"){id name shortName categories{name}}}`).then(d => {
-                      setQiResults((d?.items || []).slice(0, 8));
-                      setQiSearching(false);
-                    }).catch(() => { setQiResults([]); setQiSearching(false); });
-                  }
-                }}
-                style={{ ...T.input, flex: 1, fontSize: T.fs2 }} />
-              <button onClick={() => {
-                if (qiSearch.length < 2) return;
-                setQiSearching(true);
-                fetchAPI(`{items(lang:en,name:"${qiSearch.replace(/"/g, '\\"')}"){id name shortName categories{name}}}`).then(d => {
+            <div style={{ fontSize: T.fs2, color: T.orange, letterSpacing: 1, marginBottom: 8 }}>⚡ FIND ANY ITEM<Tip text="Search for any item by name. Click a result to see all maps ranked by loot potential — pick your map, and we'll generate a loot run." /></div>
+            <input value={qiSearch} onChange={e => {
+              const val = e.target.value;
+              setQiSearch(val);
+              clearTimeout(qiDebounce.current);
+              if (val.length < 2) { setQiResults(null); setQiExpanded(null); return; }
+              setQiSearching(true); setQiExpanded(null);
+              qiDebounce.current = setTimeout(() => {
+                fetchAPI(`{items(lang:en,name:"${val.replace(/"/g, '\\"')}"){id name shortName categories{name}}}`).then(d => {
                   setQiResults((d?.items || []).slice(0, 8));
                   setQiSearching(false);
                 }).catch(() => { setQiResults([]); setQiSearching(false); });
-              }} style={{ background: qiSearch.length >= 2 ? T.orange + "22" : "transparent", border: `1px solid ${qiSearch.length >= 2 ? T.orange : T.border}`, color: qiSearch.length >= 2 ? T.orange : T.textDim, padding: "8px 14px", fontSize: T.fs2, fontFamily: T.sans, cursor: qiSearch.length >= 2 ? "pointer" : "default" }}>SEARCH</button>
-            </div>
+              }, 300);
+            }} placeholder="Start typing an item name..."
+              style={{ ...T.input, width: "100%", fontSize: T.fs2 }} />
             {qiSearching && <div style={{ fontSize: T.fs2, color: T.textDim, marginTop: 6 }}>Searching...</div>}
             {qiResults && !qiSearching && (
               <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 3 }}>
@@ -2885,23 +2885,36 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
                 {qiResults.map(item => {
                   const ranked = computeItemRecommendation([{ id: item.id, name: item.name, shortName: item.shortName, count: 1 }], apiMaps);
                   const bestMap = ranked[0];
+                  const isExpanded = qiExpanded === item.id;
                   return (
-                    <button key={item.id} onClick={() => {
-                      if (!bestMap) return;
-                      setSelectedMapId(bestMap.mapId);
-                      setFaction("pmc");
-                      setRouteMode("loot");
-                      setLootSubMode("equipment");
-                      saveTargetEquipment([{ id: item.id, name: item.name, shortName: item.shortName, categories: item.categories, count: 1 }]);
-                      const qIds = new Set([myProfile.id]);
-                      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
-                      setActiveIds(qIds);
-                      setExtractChoices({});
-                      setQuickGenPending(true);
-                    }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: T.surface, border: `1px solid ${T.border}`, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>
-                      <span style={{ fontSize: T.fs3, color: T.textBright, fontFamily: T.sans }}>{item.name}</span>
-                      {bestMap && <span style={{ fontSize: 14, color: T.orange, fontFamily: T.sans, whiteSpace: "nowrap", marginLeft: 8 }}>→ {bestMap.mapName}</span>}
-                    </button>
+                    <div key={item.id} style={{ display: "flex", flexDirection: "column" }}>
+                      <button onClick={() => setQiExpanded(isExpanded ? null : item.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: isExpanded ? T.orange + "0a" : T.surface, border: `1px solid ${isExpanded ? T.orange + "44" : T.border}`, padding: "8px 10px", cursor: "pointer", textAlign: "left" }}>
+                        <span style={{ fontSize: T.fs3, color: T.textBright, fontFamily: T.sans }}>{item.name}</span>
+                        {bestMap && <span style={{ fontSize: 14, color: T.orange, fontFamily: T.sans, whiteSpace: "nowrap", marginLeft: 8 }}>{isExpanded ? "▾" : "▸"} {bestMap.mapName}</span>}
+                      </button>
+                      {isExpanded && ranked.length > 0 && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "4px 0 4px 12px", borderLeft: `2px solid ${T.orange}44` }}>
+                          {ranked.map((m, i) => (
+                            <button key={m.mapId} onClick={() => {
+                              setSelectedMapId(m.mapId);
+                              setFaction("pmc");
+                              setRouteMode("loot");
+                              setLootSubMode("equipment");
+                              saveTargetEquipment([{ id: item.id, name: item.name, shortName: item.shortName, categories: item.categories, count: 1 }]);
+                              const qIds = new Set([myProfile.id]);
+                              if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+                              setActiveIds(qIds);
+                              setExtractChoices({});
+                              setQuickGenPending(true);
+                              setQiExpanded(null);
+                            }} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: i === 0 ? T.gold + "0c" : "transparent", border: `1px solid ${i === 0 ? T.gold + "33" : T.border}`, padding: "6px 10px", cursor: "pointer", textAlign: "left" }}>
+                              <span style={{ fontSize: T.fs2, color: i === 0 ? T.gold : T.textBright, fontFamily: T.sans }}>{i === 0 ? "★ " : ""}{m.mapName}</span>
+                              <span style={{ fontSize: T.fs1, color: T.textDim, fontFamily: T.sans, whiteSpace: "nowrap", marginLeft: 8 }}>score {m.score}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
