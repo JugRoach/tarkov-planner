@@ -280,15 +280,15 @@ const EMAPS = [
    desc:"ULTRA Mall. High loot density.",bosses:["Killa (mall interior)"],
    wiki:"https://escapefromtarkov.fandom.com/wiki/Interchange",mapgenie:"https://mapgenie.io/tarkov/maps/interchange",tarkovdev:"https://tarkov.dev/map/interchange",
    lootPoints:[
-    {name:"Techlight",type:"tech",pct:{x:0.52,y:0.3},note:"GPUs, Tetriz, electronics — top-tier tech loot",tags:["Electronics","Info"]},
-    {name:"Rasmussen",type:"tech",pct:{x:0.48,y:0.35},note:"Electronics, barter items, tech spawns",tags:["Electronics","Barter item"]},
-    {name:"KIBA Store",type:"high-value",pct:{x:0.55,y:0.42},note:"Weapons, attachments — requires 2 KIBA keys",tags:["Weapon","Weapon mod","Ammo"]},
-    {name:"Goshan (grocery store)",type:"mixed",pct:{x:0.42,y:0.55},note:"Food, drinks, rations — best food loot on Interchange",tags:["Food","Food and drink","Drink","Barter item"]},
-    {name:"OLI (back shelves)",type:"mixed",pct:{x:0.6,y:0.6},note:"Fuel, motors, hoses, hideout materials",tags:["Fuel","Building material","Tool","Household goods"]},
-    {name:"IDEA Office",type:"mixed",pct:{x:0.3,y:0.45},note:"PCs, filing cabinets, office loot",tags:["Electronics","Info","Barter item"]},
-    {name:"EMERCOM Medical",type:"medical",pct:{x:0.75,y:0.72},note:"Medical supplies, stims, LEDX chance",tags:["Meds","Medical supplies","Stimulant"]},
-    {name:"Power Station",type:"stash",pct:{x:0.08,y:0.15},note:"Weapon box, toolboxes, loose loot",tags:["Weapon","Tool","Building material"]},
-    {name:"Mantis / German",type:"mixed",pct:{x:0.45,y:0.45},note:"Weapon parts, barter items in mall center",tags:["Weapon mod","Barter item","Armor"]},
+    {name:"Techlight",type:"tech",pct:{x:0.59,y:0.27},note:"GPUs, Tetriz, electronics — top-tier tech loot",tags:["Electronics","Info"]},
+    {name:"Rasmussen",type:"tech",pct:{x:0.59,y:0.38},note:"Electronics, barter items, tech spawns",tags:["Electronics","Barter item"]},
+    {name:"KIBA Store",type:"high-value",pct:{x:0.59,y:0.47},note:"Weapons, attachments — requires 2 KIBA keys",tags:["Weapon","Weapon mod","Ammo"]},
+    {name:"Goshan (grocery store)",type:"mixed",pct:{x:0.64,y:0.37},note:"Food, drinks, rations — best food loot on Interchange",tags:["Food","Food and drink","Drink","Barter item"]},
+    {name:"OLI (back shelves)",type:"mixed",pct:{x:0.52,y:0.66},note:"Fuel, motors, hoses, hideout materials",tags:["Fuel","Building material","Tool","Household goods"]},
+    {name:"IDEA Office",type:"mixed",pct:{x:0.58,y:0.20},note:"PCs, filing cabinets, office loot",tags:["Electronics","Info","Barter item"]},
+    {name:"EMERCOM Medical",type:"medical",pct:{x:0.78,y:0.75},note:"Medical supplies, stims, LEDX chance",tags:["Meds","Medical supplies","Stimulant"]},
+    {name:"Power Station",type:"stash",pct:{x:0.78,y:0.11},note:"Weapon box, toolboxes, loose loot",tags:["Weapon","Tool","Building material"]},
+    {name:"Mantis / German",type:"mixed",pct:{x:0.56,y:0.49},note:"Weapon parts, barter items in mall center",tags:["Weapon mod","Barter item","Armor"]},
    ],
    pmcExtracts:[
     {name:"Emercom Checkpoint",  type:"open",   note:"Always available", pct:{x:0.89,y:0.82}, requireItems:[]},
@@ -1732,6 +1732,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                     })()}
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    {!isComplete && <button onClick={() => saveMyProfile({ ...myProfile, progress: markTaskCompleteInProgress(myProfile.id, taskId, apiTask, myProfile.progress || {}) })} style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>✓ DONE</button>}
                     {!isComplete && apiTask.map && onRouteTask && <button onClick={() => onRouteTask(taskId, apiTask.map.id)} style={{ background: T.gold + "22", border: `1px solid ${T.gold}`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>▶ ROUTE</button>}
                     <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px" }}>×</button>
                   </div>
