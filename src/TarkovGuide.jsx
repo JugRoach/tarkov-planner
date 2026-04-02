@@ -1005,6 +1005,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiTraders, apiMa
                             <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
                             <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                               <Badge label={traderName} color={pl.color} />
+                              {apiTask.map ? <Badge label={apiTask.map.name} color={T.blue} /> : <Badge label="ANY MAP" color={T.cyan} />}
                               <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
                             </div>
                             {!isComplete && (() => {
@@ -1746,6 +1747,8 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
           myTasksWithApi.sort((a, b) => {
             const ac = isTaskComplete(a), bc = isTaskComplete(b);
             if (ac !== bc) return ac ? 1 : -1;
+            const aAny = !a.apiTask.map, bAny = !b.apiTask.map;
+            if (!ac && !bc && aAny !== bAny) return aAny ? 1 : -1;
             return a.apiTask.name.localeCompare(b.apiTask.name);
           });
           const renderCard = ({ taskId, apiTask }) => {
@@ -1764,7 +1767,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                     <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
                     <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
                       {taskGroupBy !== "trader" && <Badge label={traderName} color={myProfile.color} />}
-                      {taskGroupBy !== "map" && apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
+                      {taskGroupBy !== "map" && (apiTask.map ? <Badge label={apiTask.map.name} color={T.blue} /> : <Badge label="ANY MAP" color={T.cyan} />)}
                       <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
                     </div>
                     {!isComplete && (() => {
@@ -1785,6 +1788,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
                     {!isComplete && <button onClick={() => saveMyProfile({ ...myProfile, progress: markTaskCompleteInProgress(myProfile.id, taskId, apiTask, myProfile.progress || {}) })} style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>✓ DONE</button>}
+                    {isComplete && <button onClick={() => { const p = { ...(myProfile.progress || {}) }; (apiTask.objectives || []).forEach(obj => { delete p[`${myProfile.id}-${taskId}-${obj.id}`]; }); saveMyProfile({ ...myProfile, progress: p }); }} style={{ background: T.errorBg, border: `1px solid ${T.errorBorder}`, color: T.error, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>↩ UNDO</button>}
                     {!isComplete && apiTask.map && onRouteTask && <button onClick={() => onRouteTask(taskId, apiTask.map.id)} style={{ background: T.gold + "22", border: `1px solid ${T.gold}`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>▶ ROUTE</button>}
                     <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px" }}>×</button>
                   </div>
@@ -2377,6 +2381,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
   const [targetTrader, setTargetTrader] = useState(null); // targeted trader for map recommendation
   const [qiSearching, setQiSearching] = useState(false);
   const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
+  const [expandedAnyTask, setExpandedAnyTask] = useState(null);
   const qiDebounce = useRef(null);
 
   // Handle pending route task from profile screen
@@ -2804,11 +2809,63 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
             </div>
           </div>
         ) : (
-          <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, textAlign: "center" }}>
-            <div style={{ fontSize: T.fs2, color: T.textDim, marginBottom: 8 }}>No incomplete tasks found.</div>
-            <div style={{ fontSize: T.fs3, color: T.textDim }}>Add tasks in <span style={{ color: T.gold }}>My Profile → Tasks</span> to get a recommendation.</div>
-            <button onClick={() => setPlannerView("full")} style={{ marginTop: 14, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "10px 20px", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ OPEN FULL PLANNER</button>
-          </div>
+          (() => {
+            const anyMapTasks = (myProfile.tasks || []).map(t => {
+              const apiTask = apiTasks?.find(x => x.id === t.taskId);
+              if (!apiTask || apiTask.map) return null;
+              const prog = myProfile.progress || {};
+              const reqObjs = (apiTask.objectives || []).filter(o => !o.optional);
+              const done = reqObjs.filter(obj => (prog[`${myProfile.id}-${t.taskId}-${obj.id}`] || 0) >= getObjMeta(obj).total).length;
+              if (done >= reqObjs.length && reqObjs.length > 0) return null;
+              return { taskId: t.taskId, apiTask, completedObjs: done, totalObjs: reqObjs.length, incompleteObjs: reqObjs.filter(obj => (prog[`${myProfile.id}-${t.taskId}-${obj.id}`] || 0) < getObjMeta(obj).total) };
+            }).filter(Boolean);
+            return anyMapTasks.length > 0 ? (
+              <div style={{ background: T.surface, border: `1px solid ${T.cyanBorder}`, borderLeft: `2px solid ${T.cyan}`, padding: 14, marginBottom: 14 }}>
+                <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 4 }}>No map-specific tasks to recommend.</div>
+                <SL c={<>ANY MAP TASKS ({anyMapTasks.length})<Tip text="These tasks can be progressed on any map — keep them in mind no matter where you raid!" /></>} s={{ marginBottom: 8, marginTop: 10 }} />
+                {anyMapTasks.map(({ taskId, apiTask, completedObjs, totalObjs, incompleteObjs }) => {
+                  const traderName = apiTask.trader?.name || "Unknown";
+                  return (
+                    <div key={taskId} style={{ background: T.cyan + "08", border: `1px solid ${T.cyan}22`, borderLeft: `2px solid ${T.cyan}`, padding: 10, marginBottom: 4 }}>
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                        {traderImgMap[traderName] && <img src={traderImgMap[traderName]} alt={traderName} style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${myProfile.color}44`, objectFit: "cover", flexShrink: 0, marginTop: 2 }} />}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: T.textBright, fontSize: T.fs2, fontWeight: "bold", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                          <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                            <Badge label={traderName} color={myProfile.color} />
+                            <Badge label="ANY MAP" color={T.cyan} />
+                            <span style={{ fontSize: T.fs2, color: T.textDim }}>{completedObjs}/{totalObjs} obj</span>
+                          </div>
+                          {(() => {
+                            const showAll = incompleteObjs.length <= 6;
+                            const visible = showAll ? incompleteObjs : incompleteObjs.slice(0, 2);
+                            return <>
+                              {visible.map(obj => {
+                                const meta = getObjMeta(obj);
+                                return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                              })}
+                              {!showAll && <button onClick={() => setExpandedAnyTask(expandedAnyTask === taskId ? null : taskId)} style={{ background: "transparent", border: "none", color: T.blue, fontSize: T.fs1, cursor: "pointer", padding: 0, marginTop: 3, fontFamily: T.sans }}>{expandedAnyTask === taskId ? "▴ show less" : `▾ +${incompleteObjs.length - 2} more`}</button>}
+                              {!showAll && expandedAnyTask === taskId && incompleteObjs.slice(2).map(obj => {
+                                const meta = getObjMeta(obj);
+                                return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                              })}
+                            </>;
+                          })()}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button onClick={() => setPlannerView("full")} style={{ width: "100%", marginTop: 10, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "10px 0", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ OPEN FULL PLANNER</button>
+              </div>
+            ) : (
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, textAlign: "center" }}>
+                <div style={{ fontSize: T.fs2, color: T.textDim, marginBottom: 8 }}>No incomplete tasks found.</div>
+                <div style={{ fontSize: T.fs3, color: T.textDim }}>Add tasks in <span style={{ color: T.gold }}>My Profile → Tasks</span> to get a recommendation.</div>
+                <button onClick={() => setPlannerView("full")} style={{ marginTop: 14, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "10px 20px", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ OPEN FULL PLANNER</button>
+              </div>
+            );
+          })()
         )}
 
         {/* Pick any map */}
