@@ -1228,6 +1228,8 @@ const MAP_SVG_NAMES = {customs:"Customs",factory:"Factory",woods:"Woods",interch
 function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgErr, setImgErr] = useState(false);
+  const [hoveredNode, setHoveredNode] = useState(null);
+  const mapRef = useRef(null);
   const svgName = apiMap ? MAP_SVG_NAMES[apiMap.normalizedName] : null;
   const svgUrl = svgName ? `https://assets.tarkov.dev/maps/svg/${svgName}.svg` : null;
   const objWaypoints = route.filter(w => w.pct && !w.isExtract);
@@ -1236,7 +1238,10 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
 
   return (
     <div>
-      <div style={{ position: "relative", background: "#181818", border: `1px solid ${T.border}` }}>
+      <div ref={mapRef} style={{ position: "relative", background: "#181818", border: `1px solid ${T.border}` }}>
+        {hoveredNode && (
+          <div style={{ position: "absolute", left: hoveredNode.x + 12, top: hoveredNode.y - 28, background: "rgba(13,17,23,0.95)", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.mono, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 10 }}>{hoveredNode.label}</div>
+        )}
         {svgUrl && !imgErr ? (
           <>
             {!imgLoaded && <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontSize: T.fs4, fontFamily: T.sans }}>Loading map from tarkov.dev...</div>}
@@ -1276,7 +1281,10 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
                 {objWaypoints.map((w, i) => {
                   const col = w.players[0]?.color || T.gold;
                   return (
-                    <g key={w.id}>
+                    <g key={w.id} style={{ pointerEvents: "auto", cursor: "pointer" }}
+                      onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: w.locationName, x: e.clientX - r.left, y: e.clientY - r.top }); }}
+                      onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
+                      onMouseLeave={() => setHoveredNode(null)}>
                       <circle cx={w.pct.x} cy={w.pct.y} r="0.024" fill={T.bg} stroke={col} strokeWidth="0.005" />
                       <text x={w.pct.x} y={w.pct.y + 0.009} textAnchor="middle" fill={col} fontSize="0.019" fontFamily={T.mono} fontWeight="bold">{i + 1}</text>
                       {w.players.slice(1, 3).map((p, pi) => (
@@ -1288,7 +1296,10 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
                 })}
                 {/* Extract waypoints — green, with ⬆ symbol */}
                 {extractWaypoints.map((w) => (
-                  <g key={w.id}>
+                  <g key={w.id} style={{ pointerEvents: "auto", cursor: "pointer" }}
+                    onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: w.locationName, x: e.clientX - r.left, y: e.clientY - r.top }); }}
+                    onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
+                    onMouseLeave={() => setHoveredNode(null)}>
                     <circle cx={w.pct.x} cy={w.pct.y} r="0.026" fill={T.successBg} stroke={T.success} strokeWidth="0.006" />
                     <text x={w.pct.x} y={w.pct.y + 0.009} textAnchor="middle" fill={T.success} fontSize="0.018" fontFamily={T.mono} fontWeight="bold">⬆</text>
                   </g>
