@@ -1443,7 +1443,7 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
 }
 
 // ─── MY PROFILE TAB ──────────────────────────────────────────────────────
-function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, apiError, apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget }) {
+function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, apiError, apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget, onRouteTask }) {
   const [screen, setScreen] = useState("profile");
   const [profileSub, setProfileSub] = useState("profile"); // "profile" | "tasks" | "hideout" | "chains"
   const [chainTrader, setChainTrader] = useState("all");
@@ -1454,6 +1454,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [showRestore, setShowRestore] = useState(false);
+  const [expandedTask, setExpandedTask] = useState(null);
   const [restoreCode, setRestoreCode] = useState("");
   const [restoreError, setRestoreError] = useState("");
   const [hideoutPrereq, setHideoutPrereq] = useState(null);
@@ -1711,10 +1712,12 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
               )}
               {myTasksWithApi.map(({ taskId, apiTask }) => {
                 const prog = myProfile.progress || {};
-                const completedObjs = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
-                const totalObjs = (apiTask.objectives || []).filter(o => !o.optional).length;
+                const reqObjs = (apiTask.objectives || []).filter(o => !o.optional);
+                const completedObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
+                const totalObjs = reqObjs.length;
                 const isComplete = completedObjs >= totalObjs && totalObjs > 0;
                 const traderName = apiTask.trader?.name || "Unknown";
+                const incompleteObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) < meta.total; });
                 return (
                   <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
                     <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
@@ -1726,8 +1729,26 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                           {apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
                           <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
                         </div>
+                        {!isComplete && (() => {
+                          const showAll = incompleteObjs.length <= 6;
+                          const visible = showAll ? incompleteObjs : incompleteObjs.slice(0, 2);
+                          return <>
+                            {visible.map(obj => {
+                              const meta = getObjMeta(obj);
+                              return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                            })}
+                            {!showAll && <button onClick={() => setExpandedTask(expandedTask === taskId ? null : taskId)} style={{ background: "transparent", border: "none", color: T.blue, fontSize: T.fs1, cursor: "pointer", padding: 0, marginTop: 3, fontFamily: T.sans }}>{expandedTask === taskId ? "▴ show less" : `▾ +${incompleteObjs.length - 2} more`}</button>}
+                            {!showAll && expandedTask === taskId && incompleteObjs.slice(2).map(obj => {
+                              const meta = getObjMeta(obj);
+                              return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                            })}
+                          </>;
+                        })()}
                       </div>
-                      <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px", flexShrink: 0 }}>×</button>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                        {!isComplete && apiTask.map && onRouteTask && <button onClick={() => onRouteTask(taskId, apiTask.map.id)} style={{ background: T.gold + "22", border: `1px solid ${T.gold}`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>▶ ROUTE</button>}
+                        <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px" }}>×</button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -2227,7 +2248,7 @@ function useSquadRoom(myProfile) {
 }
 
 // ─── SQUAD TAB ────────────────────────────────────────────────────────────
-function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loading, apiError, hideoutTarget, apiHideout, hideoutLevels }) {
+function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loading, apiError, hideoutTarget, apiHideout, hideoutLevels, pendingRouteTask, clearPendingRouteTask }) {
   const [importCode, setImportCode] = useState("");
   const [importError, setImportError] = useState("");
   const [importedSquad, saveImportedSquad] = useStorage("tg-squad-v3", []);
@@ -2261,6 +2282,23 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
   const [qiSearching, setQiSearching] = useState(false);
   const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
   const qiDebounce = useRef(null);
+
+  // Handle pending route task from profile screen
+  useEffect(() => {
+    if (!pendingRouteTask || !apiMaps) return;
+    const { taskId, mapId } = pendingRouteTask;
+    if (mapId) {
+      setSelectedMapId(mapId);
+      setFaction("pmc");
+      setRouteMode("tasks");
+      setActiveIds(new Set([myProfile.id]));
+      setPriorityTasks({ [myProfile.id]: [taskId] });
+      setExtractChoices({});
+      setPlannerView("quick");
+      setQuickGenPending(true);
+    }
+    clearPendingRouteTask();
+  }, [pendingRouteTask, apiMaps]);
 
   const searchEquipment = async (term) => {
     if (!term || term.length < 2) { setEquipResults(null); return; }
@@ -3558,6 +3596,7 @@ export default function TarkovGuide() {
     })();
   }, []);
 
+  const [pendingRouteTask, setPendingRouteTask] = useState(null);
   const [welcomed, saveWelcomed] = useStorage("tg-welcomed-v6", false);
   const [showWelcome, setShowWelcome] = useState(false);
   useEffect(() => { if (profileReady && !welcomed) setShowWelcome(true); }, [profileReady, welcomed]);
@@ -3580,8 +3619,8 @@ export default function TarkovGuide() {
         </div>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {tab === "profile" && <MyProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} />}
-        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} />}
+        {tab === "profile" && <MyProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} onRouteTask={(taskId, mapId) => { setPendingRouteTask({ taskId, mapId }); setTab("squad"); }} />}
+        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} pendingRouteTask={pendingRouteTask} clearPendingRouteTask={() => setPendingRouteTask(null)} />}
         {tab === "extracts" && <ExtractsTab />}
         {tab === "maps" && <MapsTab />}
       </div>
