@@ -2227,7 +2227,7 @@ function useSquadRoom(myProfile) {
 }
 
 // ─── SQUAD TAB ────────────────────────────────────────────────────────────
-function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiError, hideoutTarget, apiHideout, hideoutLevels }) {
+function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loading, apiError, hideoutTarget, apiHideout, hideoutLevels }) {
   const [importCode, setImportCode] = useState("");
   const [importError, setImportError] = useState("");
   const [importedSquad, saveImportedSquad] = useStorage("tg-squad-v3", []);
@@ -2257,6 +2257,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   const [qhItem, setQhItem] = useState(null); // quick hideout: selected item {id, name, shortName, count}
   const [qiSearch, setQiSearch] = useState(""); // quick item search term
   const [qiResults, setQiResults] = useState(null); // quick item search results
+  const [targetTrader, setTargetTrader] = useState(null); // targeted trader for map recommendation
   const [qiSearching, setQiSearching] = useState(false);
   const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
   const qiDebounce = useRef(null);
@@ -2585,10 +2586,13 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
   );
 
   // ─── Quick Start recommendation ───
-  const quickRec = computeMapRecommendation(allProfiles, apiTasks);
+  const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
+  const traders = [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort);
+  const filteredApiTasks = targetTrader ? apiTasks?.filter(t => t.trader?.name === targetTrader) : apiTasks;
+  const quickRec = computeMapRecommendation(allProfiles, filteredApiTasks);
   const quickTopMap = quickRec[0] || null;
   const quickTopApiMap = quickTopMap ? apiMaps?.find(m => m.id === quickTopMap.mapId) : null;
-  const quickTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson) : {};
+  const quickTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson) : {};
   const quickTaskCount = Object.values(quickTasks).flat().length;
   const quickTaskDetails = Object.entries(quickTasks).flatMap(([pid, tids]) => tids.map(tid => {
     const at = apiTasks?.find(t => t.id === tid);
@@ -2603,7 +2607,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
     const qIds = new Set([myProfile.id]);
     if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
     setActiveIds(qIds);
-    setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson));
+    setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson));
     setExtractChoices({});
     setQuickGenPending(true);
   };
@@ -2616,7 +2620,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
       const qIds = new Set([myProfile.id]);
       if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
       setActiveIds(qIds);
-      setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, apiTasks, tasksPerPerson));
+      setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson));
     }
     setPlannerView("full");
   };
@@ -2628,11 +2632,21 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
         <SL c={<>QUICK START<Tip text="Your recommended raid based on incomplete tasks. Tap GO to jump straight in, or CUSTOMIZE to adjust the map, tasks, and extract." /></>} s={{ marginBottom: 8 }} />
         {loading && <div style={{ fontSize: T.fs3, color: T.textDim, marginBottom: 6 }}>Loading from tarkov.dev...</div>}
         {apiError && <div style={{ fontSize: T.fs3, color: T.error, marginBottom: 6 }}>tarkov.dev unavailable — check connection</div>}
+        <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 4 }}>TARGET TRADER<Tip text="Pick a trader to focus your map recommendation on their tasks. Only maps with incomplete tasks for that trader will be recommended." /></div>
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
+          <button onClick={() => setTargetTrader(null)} style={{ padding: "4px 10px", fontSize: T.fs2, fontFamily: T.sans, background: !targetTrader ? T.gold + "22" : "transparent", border: `1px solid ${!targetTrader ? T.gold : T.border}`, color: !targetTrader ? T.gold : T.textDim, cursor: "pointer" }}>All</button>
+          {traders.map(tr => (
+            <button key={tr} onClick={() => setTargetTrader(targetTrader === tr ? null : tr)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, background: targetTrader === tr ? T.gold + "22" : "transparent", border: `1px solid ${targetTrader === tr ? T.gold : T.border}`, color: targetTrader === tr ? T.gold : T.textDim, cursor: "pointer" }}>
+              {traderImgMap[tr] && <img src={traderImgMap[tr]} alt={tr} style={{ width: 20, height: 20, borderRadius: "50%", objectFit: "cover" }} />}
+              <span>{tr}</span>
+            </button>
+          ))}
+        </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
         {quickTopMap && quickTaskCount > 0 ? (
           <div style={{ background: T.surface, border: `2px solid ${T.gold}44`, borderLeft: `2px solid ${T.gold}`, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 8 }}>★ RECOMMENDED MAP</div>
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 8 }}>★ RECOMMENDED MAP{targetTrader ? ` FOR ${targetTrader.toUpperCase()}` : ""}</div>
             <div style={{ fontSize: T.fs5, color: T.gold, fontWeight: "bold", fontFamily: T.sans, letterSpacing: 1, marginBottom: 4 }}>{quickTopMap.mapName}</div>
             <div style={{ fontSize: T.fs2, color: T.textDim, marginBottom: 10 }}>{quickTopMap.totalTasks} task{quickTopMap.totalTasks !== 1 ? "s" : ""} · {quickTopMap.totalIncomplete} objective{quickTopMap.totalIncomplete !== 1 ? "s" : ""} remaining</div>
 
@@ -2680,7 +2694,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, loading, apiErr
                     const qIds = new Set([myProfile.id]);
                     if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
                     setActiveIds(qIds);
-                    setPriorityTasks(computeQuickTasks(allProfiles, m.id, apiTasks, tasksPerPerson));
+                    setPriorityTasks(computeQuickTasks(allProfiles, m.id, filteredApiTasks, tasksPerPerson));
                     setExtractChoices({});
                     setQuickGenPending(true);
                   }} style={{ background: isTop ? T.gold + "15" : "#181818", border: `1px solid ${isTop ? T.gold + "66" : T.border}`, color: isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
@@ -3567,7 +3581,7 @@ export default function TarkovGuide() {
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {tab === "profile" && <MyProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} />}
-        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} />}
+        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} />}
         {tab === "extracts" && <ExtractsTab />}
         {tab === "maps" && <MapsTab />}
       </div>
