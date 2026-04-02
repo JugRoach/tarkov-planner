@@ -1470,7 +1470,6 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
     const newTasks = [...existing, { taskId }];
     let newProgress = { ...(myProfile.progress || {}) };
     prereqIds.forEach(prereqId => {
-      if (!newTasks.some(t => t.taskId === prereqId)) newTasks.push({ taskId: prereqId });
       const prereqTask = apiTasks?.find(t => t.id === prereqId);
       if (prereqTask) newProgress = markTaskCompleteInProgress(myProfile.id, prereqId, prereqTask, newProgress);
     });
@@ -1512,7 +1511,6 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
         if (!allTasks.some(t => t.taskId === task.id)) allTasks.push({ taskId: task.id });
         const prereqIds = [...new Set(getAllPrereqTaskIds(task.id, apiTasks))];
         prereqIds.forEach(prereqId => {
-          if (!allTasks.some(t => t.taskId === prereqId)) allTasks.push({ taskId: prereqId });
           const prereqTask = apiTasks?.find(t => t.id === prereqId);
           if (prereqTask) newProgress = markTaskCompleteInProgress(myProfile.id, prereqId, prereqTask, newProgress);
         });
@@ -1579,11 +1577,19 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
           <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}<Tip text="Tap the ↗ icon next to any task name to open its wiki page for detailed walkthroughs and tips." /></div>
           {browseTasks.map(task => {
             const added = myProfile.tasks?.some(t => t.taskId === task.id);
+            const prog = myProfile.progress || {};
+            const reqObjs = (task.objectives || []).filter(o => !o.optional);
+            const allDone = reqObjs.length > 0 && reqObjs.every(obj => { const k = `${myProfile.id}-${task.id}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; });
+            const prereqDone = !added && allDone;
             return (
-              <div key={task.id} style={{ background: T.surface, border: `1px solid ${added ? myProfile.color : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : T.border}`, padding: 10, marginBottom: 6 }}>
+              <div key={task.id} style={{ background: prereqDone ? T.successBg : T.surface, border: `1px solid ${added ? myProfile.color : prereqDone ? T.successBorder : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : prereqDone ? T.success : T.border}`, padding: 10, marginBottom: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                  <div style={{ color: T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
-                  <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
+                  <div style={{ color: prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                  {prereqDone ? (
+                    <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, flexShrink: 0, letterSpacing: 1 }}>COMPLETE</span>
+                  ) : (
+                    <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
                   {taskTrader === "all" && <Badge label={task.trader?.name || "?"} color={T.textDim} />}
@@ -1672,19 +1678,11 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
 
         {/* ── TASKS SUB-TAB ── */}
         {profileSub === "tasks" && (() => {
-          // Group selected tasks by trader
           const myTasksWithApi = (myProfile.tasks || []).map(t => {
             const apiTask = apiTasks?.find(x => x.id === t.taskId);
             return apiTask ? { taskId: t.taskId, apiTask } : null;
           }).filter(Boolean);
-          const traderGroups = {};
-          myTasksWithApi.forEach(({ taskId, apiTask }) => {
-            const traderName = apiTask.trader?.name || "Unknown";
-            if (!traderGroups[traderName]) traderGroups[traderName] = [];
-            traderGroups[traderName].push({ taskId, apiTask });
-          });
-          Object.values(traderGroups).forEach(tasks => tasks.sort((a, b) => a.apiTask.name.localeCompare(b.apiTask.name)));
-          const sortedTraders = Object.keys(traderGroups).sort(traderSort);
+          myTasksWithApi.sort((a, b) => a.apiTask.name.localeCompare(b.apiTask.name));
           return (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1700,43 +1698,26 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                   <button onClick={() => setScreen("browsetasks")} style={{ background: "transparent", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>BROWSE ALL TASKS →</button>
                 </div>
               )}
-              {sortedTraders.map(traderName => {
-                const tasks = traderGroups[traderName];
-                const completedCount = tasks.filter(({ taskId, apiTask }) => {
-                  const prog = myProfile.progress || {};
-                  const done = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
-                  const total = (apiTask.objectives || []).filter(o => !o.optional).length;
-                  return done >= total && total > 0;
-                }).length;
+              {myTasksWithApi.map(({ taskId, apiTask }) => {
+                const prog = myProfile.progress || {};
+                const completedObjs = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
+                const totalObjs = (apiTask.objectives || []).filter(o => !o.optional).length;
+                const isComplete = completedObjs >= totalObjs && totalObjs > 0;
+                const traderName = apiTask.trader?.name || "Unknown";
                 return (
-                  <div key={traderName} style={{ marginBottom: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: myProfile.color + "11", borderLeft: `2px solid ${myProfile.color}`, marginBottom: 6 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        {traderImgMap[traderName] && <img src={traderImgMap[traderName]} alt={traderName} style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${myProfile.color}44`, objectFit: "cover" }} />}
-                        <div style={{ fontSize: T.fs3, color: myProfile.color, fontWeight: "bold", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase" }}>{traderName}</div>
-                      </div>
-                      <div style={{ fontSize: T.fs2, color: completedCount === tasks.length && tasks.length > 0 ? T.success : T.textDim, fontFamily: T.sans }}>{completedCount}/{tasks.length} done</div>
-                    </div>
-                    {tasks.map(({ taskId, apiTask }) => {
-                      const prog = myProfile.progress || {};
-                      const completedObjs = (apiTask.objectives || []).filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
-                      const totalObjs = (apiTask.objectives || []).filter(o => !o.optional).length;
-                      const isComplete = completedObjs >= totalObjs && totalObjs > 0;
-                      return (
-                        <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
-                              <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-                                {apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
-                                <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
-                              </div>
-                            </div>
-                            <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px", flexShrink: 0 }}>×</button>
-                          </div>
+                  <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                      {traderImgMap[traderName] && <img src={traderImgMap[traderName]} alt={traderName} style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${myProfile.color}44`, objectFit: "cover", flexShrink: 0, marginTop: 2 }} />}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                        <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                          <Badge label={traderName} color={myProfile.color} />
+                          {apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
+                          <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
                         </div>
-                      );
-                    })}
+                      </div>
+                      <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px", flexShrink: 0 }}>×</button>
+                    </div>
                   </div>
                 );
               })}
