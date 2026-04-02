@@ -1455,6 +1455,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
   const [editingName, setEditingName] = useState(false);
   const [showRestore, setShowRestore] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
+  const [taskGroupBy, setTaskGroupBy] = useState("trader"); // "az", "trader", "map"
   const [restoreCode, setRestoreCode] = useState("");
   const [restoreError, setRestoreError] = useState("");
   const [hideoutPrereq, setHideoutPrereq] = useState(null);
@@ -1695,12 +1696,75 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
             return apiTask ? { taskId: t.taskId, apiTask } : null;
           }).filter(Boolean);
           myTasksWithApi.sort((a, b) => a.apiTask.name.localeCompare(b.apiTask.name));
+          const renderCard = ({ taskId, apiTask }) => {
+            const prog = myProfile.progress || {};
+            const reqObjs = (apiTask.objectives || []).filter(o => !o.optional);
+            const completedObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
+            const totalObjs = reqObjs.length;
+            const isComplete = completedObjs >= totalObjs && totalObjs > 0;
+            const traderName = apiTask.trader?.name || "Unknown";
+            const incompleteObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) < meta.total; });
+            return (
+              <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+                  {taskGroupBy !== "trader" && traderImgMap[traderName] && <img src={traderImgMap[traderName]} alt={traderName} style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${myProfile.color}44`, objectFit: "cover", flexShrink: 0, marginTop: 2 }} />}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                    <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
+                      {taskGroupBy !== "trader" && <Badge label={traderName} color={myProfile.color} />}
+                      {taskGroupBy !== "map" && apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
+                      <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
+                    </div>
+                    {!isComplete && (() => {
+                      const showAll = incompleteObjs.length <= 6;
+                      const visible = showAll ? incompleteObjs : incompleteObjs.slice(0, 2);
+                      return <>
+                        {visible.map(obj => {
+                          const meta = getObjMeta(obj);
+                          return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                        })}
+                        {!showAll && <button onClick={() => setExpandedTask(expandedTask === taskId ? null : taskId)} style={{ background: "transparent", border: "none", color: T.blue, fontSize: T.fs1, cursor: "pointer", padding: 0, marginTop: 3, fontFamily: T.sans }}>{expandedTask === taskId ? "▴ show less" : `▾ +${incompleteObjs.length - 2} more`}</button>}
+                        {!showAll && expandedTask === taskId && incompleteObjs.slice(2).map(obj => {
+                          const meta = getObjMeta(obj);
+                          return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
+                        })}
+                      </>;
+                    })()}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                    {!isComplete && apiTask.map && onRouteTask && <button onClick={() => onRouteTask(taskId, apiTask.map.id)} style={{ background: T.gold + "22", border: `1px solid ${T.gold}`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>▶ ROUTE</button>}
+                    <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px" }}>×</button>
+                  </div>
+                </div>
+              </div>
+            );
+          };
+          // Build groups
+          const buildGroups = () => {
+            if (taskGroupBy === "az") return [{ key: "all", label: null, tasks: myTasksWithApi }];
+            const groups = {};
+            myTasksWithApi.forEach(item => {
+              const gk = taskGroupBy === "trader" ? (item.apiTask.trader?.name || "Unknown") : (item.apiTask.map?.name || "Any Map");
+              if (!groups[gk]) groups[gk] = [];
+              groups[gk].push(item);
+            });
+            const sortedKeys = Object.keys(groups).sort(taskGroupBy === "trader" ? traderSort : (a, b) => a.localeCompare(b));
+            return sortedKeys.map(k => ({ key: k, label: k, tasks: groups[k] }));
+          };
+          const groups = buildGroups();
           return (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <SL c={<>MY TASKS ({myProfile.tasks?.length || 0})<Tip text="Browse and add the tasks you're currently working on. These get included in your share code so your squad knows what objectives you need to hit." /></>} s={{ marginBottom: 0 }} />
                 <button onClick={() => setScreen("browsetasks")} style={{ background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "6px 12px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>+ BROWSE TASKS</button>
               </div>
+              {myProfile.tasks?.length > 0 && (
+                <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
+                  {[{id:"az",label:"A-Z"},{id:"trader",label:"TRADER"},{id:"map",label:"MAP"}].map(o => (
+                    <button key={o.id} onClick={() => setTaskGroupBy(o.id)} style={{ flex: 1, background: taskGroupBy === o.id ? myProfile.color + "22" : "transparent", border: `1px solid ${taskGroupBy === o.id ? myProfile.color : T.border}`, color: taskGroupBy === o.id ? myProfile.color : T.textDim, padding: "5px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textAlign: "center" }}>{o.label}</button>
+                  ))}
+                </div>
+              )}
               {myProfile.tasks?.length > 0 && (
                 <button onClick={() => { if (window.confirm("Clear all " + myProfile.tasks.length + " tasks?")) saveMyProfile({ ...myProfile, tasks: [], progress: {} }); }} style={{ width: "100%", background: T.errorBg, border: `2px solid ${T.errorBorder}`, color: T.error, padding: "8px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>✕ CLEAR ALL TASKS</button>
               )}
@@ -1710,46 +1774,25 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                   <button onClick={() => setScreen("browsetasks")} style={{ background: "transparent", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>BROWSE ALL TASKS →</button>
                 </div>
               )}
-              {myTasksWithApi.map(({ taskId, apiTask }) => {
-                const prog = myProfile.progress || {};
-                const reqObjs = (apiTask.objectives || []).filter(o => !o.optional);
-                const completedObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; }).length;
-                const totalObjs = reqObjs.length;
-                const isComplete = completedObjs >= totalObjs && totalObjs > 0;
-                const traderName = apiTask.trader?.name || "Unknown";
-                const incompleteObjs = reqObjs.filter(obj => { const k = `${myProfile.id}-${taskId}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) < meta.total; });
+              {groups.map(g => {
+                const completedCount = g.tasks.filter(({ taskId, apiTask }) => {
+                  const prog = myProfile.progress || {};
+                  const objs = (apiTask.objectives || []).filter(o => !o.optional);
+                  const done = objs.filter(obj => (prog[`${myProfile.id}-${taskId}-${obj.id}`] || 0) >= getObjMeta(obj).total).length;
+                  return done >= objs.length && objs.length > 0;
+                }).length;
                 return (
-                  <div key={taskId} style={{ background: isComplete ? T.successBg : T.surface, border: `1px solid ${isComplete ? T.successBorder : T.border}`, borderLeft: `2px solid ${isComplete ? T.success : T.border}`, padding: 10, marginBottom: 4 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-                      {traderImgMap[traderName] && <img src={traderImgMap[traderName]} alt={traderName} style={{ width: 24, height: 24, borderRadius: "50%", border: `1px solid ${myProfile.color}44`, objectFit: "cover", flexShrink: 0, marginTop: 2 }} />}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ color: isComplete ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", textDecoration: isComplete ? "line-through" : "none", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>{apiTask.name}{apiTask.wikiLink && <a href={apiTask.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
-                        <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-                          <Badge label={traderName} color={myProfile.color} />
-                          {apiTask.map && <Badge label={apiTask.map.name} color={T.blue} />}
-                          <span style={{ fontSize: T.fs2, color: isComplete ? T.success : T.textDim }}>{completedObjs}/{totalObjs} obj</span>
+                  <div key={g.key} style={{ marginBottom: g.label ? 12 : 0 }}>
+                    {g.label && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: myProfile.color + "11", borderLeft: `2px solid ${myProfile.color}`, marginBottom: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {taskGroupBy === "trader" && traderImgMap[g.label] && <img src={traderImgMap[g.label]} alt={g.label} style={{ width: 28, height: 28, borderRadius: "50%", border: `2px solid ${myProfile.color}44`, objectFit: "cover" }} />}
+                          <div style={{ fontSize: T.fs3, color: myProfile.color, fontWeight: "bold", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase" }}>{g.label}</div>
                         </div>
-                        {!isComplete && (() => {
-                          const showAll = incompleteObjs.length <= 6;
-                          const visible = showAll ? incompleteObjs : incompleteObjs.slice(0, 2);
-                          return <>
-                            {visible.map(obj => {
-                              const meta = getObjMeta(obj);
-                              return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
-                            })}
-                            {!showAll && <button onClick={() => setExpandedTask(expandedTask === taskId ? null : taskId)} style={{ background: "transparent", border: "none", color: T.blue, fontSize: T.fs1, cursor: "pointer", padding: 0, marginTop: 3, fontFamily: T.sans }}>{expandedTask === taskId ? "▴ show less" : `▾ +${incompleteObjs.length - 2} more`}</button>}
-                            {!showAll && expandedTask === taskId && incompleteObjs.slice(2).map(obj => {
-                              const meta = getObjMeta(obj);
-                              return <div key={obj.id} style={{ fontSize: T.fs1, color: T.textDim, marginTop: 3 }}><span style={{ color: meta.color }}>{meta.icon}</span> {obj.description}</div>;
-                            })}
-                          </>;
-                        })()}
+                        <div style={{ fontSize: T.fs2, color: completedCount === g.tasks.length && g.tasks.length > 0 ? T.success : T.textDim, fontFamily: T.sans }}>{completedCount}/{g.tasks.length} done</div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
-                        {!isComplete && apiTask.map && onRouteTask && <button onClick={() => onRouteTask(taskId, apiTask.map.id)} style={{ background: T.gold + "22", border: `1px solid ${T.gold}`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>▶ ROUTE</button>}
-                        <button onClick={() => removeTask(taskId)} style={{ background: "transparent", border: "none", color: T.errorBorder, cursor: "pointer", fontSize: T.fs4, padding: "0 4px" }}>×</button>
-                      </div>
-                    </div>
+                    )}
+                    {g.tasks.map(renderCard)}
                   </div>
                 );
               })}
