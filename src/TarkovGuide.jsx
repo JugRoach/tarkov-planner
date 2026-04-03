@@ -521,6 +521,26 @@ function markTaskCompleteInProgress(profileId, taskId, apiTask, progress) {
   return p;
 }
 
+function cleanOrphanedPrereqProgress(profileId, taskList, apiTasks, progress) {
+  const taskIds = new Set(taskList.map(t => t.taskId));
+  const neededPrereqs = new Set();
+  taskList.forEach(({ taskId }) => {
+    getAllPrereqTaskIds(taskId, apiTasks).forEach(id => neededPrereqs.add(id));
+  });
+  const p = {};
+  const prefix = profileId + "-";
+  for (const [key, val] of Object.entries(progress)) {
+    if (!key.startsWith(prefix)) { p[key] = val; continue; }
+    const rest = key.slice(prefix.length);
+    const lastDash = rest.lastIndexOf("-");
+    const taskIdInKey = rest.slice(0, lastDash);
+    if (taskIds.has(taskIdInKey) || neededPrereqs.has(taskIdInKey)) {
+      p[key] = val;
+    }
+  }
+  return p;
+}
+
 // ─── MAP RECOMMENDATION ──────────────────────────────────────────────────
 function computeMapRecommendation(profiles, apiTasks) {
   if (!profiles?.length || !apiTasks?.length) return [];
@@ -1531,7 +1551,11 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
     });
     saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
   };
-  const removeTask = taskId => saveMyProfile({ ...myProfile, tasks: (myProfile.tasks || []).filter(t => t.taskId !== taskId) });
+  const removeTask = taskId => {
+    const newTasks = (myProfile.tasks || []).filter(t => t.taskId !== taskId);
+    const newProgress = cleanOrphanedPrereqProgress(myProfile.id, newTasks, apiTasks, myProfile.progress || {});
+    saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
+  };
 
   if (screen === "hideout") return (
     <HideoutManager
@@ -1575,7 +1599,9 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
     };
     const removeAllForTrader = (traderName) => {
       const trTaskIds = new Set((apiTasks || []).filter(t => t.trader?.name === traderName).map(t => t.id));
-      saveMyProfile({ ...myProfile, tasks: (myProfile.tasks || []).filter(t => !trTaskIds.has(t.taskId)) });
+      const newTasks = (myProfile.tasks || []).filter(t => !trTaskIds.has(t.taskId));
+      const newProgress = cleanOrphanedPrereqProgress(myProfile.id, newTasks, apiTasks, myProfile.progress || {});
+      saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
     };
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -1631,21 +1657,18 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
             </div>
           )}
           <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}<Tip text="Tap the ↗ icon next to any task name to open its wiki page for detailed walkthroughs and tips." /></div>
-          {browseTasks.map(task => {
+          {(() => {
+            const myPrereqIds = new Set();
+            (myProfile.tasks || []).forEach(({ taskId }) => { getAllPrereqTaskIds(taskId, apiTasks).forEach(id => myPrereqIds.add(id)); });
+            return browseTasks.map(task => {
             const added = myProfile.tasks?.some(t => t.taskId === task.id);
-            const prog = myProfile.progress || {};
-            const reqObjs = (task.objectives || []).filter(o => !o.optional);
-            const allDone = reqObjs.length > 0 && reqObjs.every(obj => { const k = `${myProfile.id}-${task.id}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; });
-            const prereqDone = !added && allDone;
+            const prereqDone = !added && myPrereqIds.has(task.id);
             return (
               <div key={task.id} style={{ background: prereqDone ? T.successBg : T.surface, border: `1px solid ${added ? myProfile.color : prereqDone ? T.successBorder : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : prereqDone ? T.success : T.border}`, padding: 10, marginBottom: 6 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
                   <div style={{ color: prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
                   {prereqDone ? (
-                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                      <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1 }}>COMPLETE</span>
-                      <button onClick={() => { const p = { ...(myProfile.progress || {}) }; (task.objectives || []).forEach(obj => { delete p[`${myProfile.id}-${task.id}-${obj.id}`]; }); saveMyProfile({ ...myProfile, progress: p }); }} style={{ background: T.errorBg, border: `1px solid ${T.errorBorder}`, color: T.error, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>↩ UNDO</button>
-                    </div>
+                    <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1, flexShrink: 0 }}>PREREQ ✓</span>
                   ) : (
                     <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
                   )}
@@ -1658,7 +1681,8 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
                 {task.objectives?.slice(0, 2).map(obj => <div key={obj.id} style={{ fontSize: T.fs3, color: T.textDim, marginTop: 2 }}>{getObjMeta(obj).icon} {obj.description}</div>)}
               </div>
             );
-          })}
+          });
+          })()}
           <div style={{ height: 20 }} />
         </div>
       </div>
@@ -2091,8 +2115,11 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
           const toggleNode = (id) => setExpandedChainNodes(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
           const expandAll = () => { const all = new Set(); filteredTasks.forEach(t => { if (childrenMap[t.id]?.length) all.add(t.id); }); setExpandedChainNodes(all); };
           const collapseAll = () => setExpandedChainNodes(new Set());
+          const myPrereqIds = new Set();
+          (myProfile.tasks || []).forEach(({ taskId }) => { getAllPrereqTaskIds(taskId, apiTasks).forEach(id => myPrereqIds.add(id)); });
           const isAdded = (id) => myProfile.tasks?.some(t => t.taskId === id);
           const isComplete = (task) => {
+            if (!isAdded(task.id) && myPrereqIds.has(task.id)) return true;
             const prog = myProfile.progress || {};
             const objs = (task.objectives || []).filter(o => !o.optional);
             if (!objs.length) return false;
