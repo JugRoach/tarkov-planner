@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
 
 const T = {
-  bg:"#141414",surface:"#1e1e1e",surfaceAlt:"#252525",surfaceHover:"#282828",border:"#333",borderBright:"#444",gold:"#d4a644",text:"#c0b8a8",textDim:"#6a6a6a",textMid:"#8a8a8a",textBright:"#e8e0d0",
-  sans:"'Segoe UI',Arial,Helvetica,sans-serif",mono:"'Courier New',Consolas,monospace",
+  bg:"#0d0e10",surface:"#1a1917",surfaceAlt:"#222018",surfaceHover:"#2a2720",border:"#2d2a24",borderBright:"#3d3930",gold:"#d2af78",text:"#c7c5b3",textDim:"#6a6458",textMid:"#8a8478",textBright:"#f0ead8",
+  sans:"'Bender','Segoe UI',-apple-system,Roboto,sans-serif",mono:"'Courier New',Consolas,monospace",
   // Semantic colors
   error:"#d44040",errorBg:"#1f1414",errorBorder:"#4a2020",
   success:"#4daa4d",successBg:"#141f14",successBorder:"#2a5a2a",
@@ -11,6 +11,8 @@ const T = {
   orange:"#c08040",orangeBg:"#1f1a14",orangeBorder:"#5a4020",
   blue:"#5a90b0",blueBg:"#141a1f",blueBorder:"#2a4060",
   purple:"#9080b0",purpleBg:"#1a141f",purpleBorder:"#3a2a5a",
+  // Consolidated input/surface colors
+  inputBg:"#151412",
   // Spacing scale
   sp1:4, sp2:8, sp3:12, sp4:16, sp5:24,
   // Font sizes (1.25 ratio scale)
@@ -20,9 +22,9 @@ const T = {
   // Accent border
   accent:2,
   // Border radius
-  r1:4, r2:6,
+  r1:4, r2:4,
   // Input base style
-  input:{ background:"#181818", border:"1px solid #383838", color:"#e0d8c8", padding:"10px 12px", fontSize:13, fontFamily:"'Segoe UI',Arial,Helvetica,sans-serif", outline:"none", boxSizing:"border-box", borderRadius:4 },
+  input:{ background:"#151412", border:"1px solid #2d2a24", color:"#f0ead8", padding:"10px 12px", fontSize:13, fontFamily:"'Bender','Segoe UI',-apple-system,Roboto,sans-serif", outline:"none", boxSizing:"border-box", borderRadius:4 },
 };
 const PLAYER_COLORS = ["#c8a84b","#5a9aba","#9a5aba","#5aba8a","#ba7a5a"];
 const MAX_SQUAD = 5;
@@ -707,9 +709,9 @@ function computeItemRecommendation(neededItems, apiMaps) {
 }
 
 // ─── SHARED UI ────────────────────────────────────────────────────────────
-const SL=({c,s={}})=><div style={{fontSize:T.fs5,color:T.textMid,letterSpacing:1.5,marginBottom:T.sp3,fontFamily:T.sans,textTransform:"uppercase",fontWeight:600,...s}}>{c}</div>;
+const SL=({c,s={}})=><div style={{fontSize:T.fs5,color:T.text,letterSpacing:1.5,marginBottom:T.sp3,fontFamily:T.sans,textTransform:"uppercase",fontWeight:600,...s}}>{c}</div>;
 const Badge=({label,color,small})=><span style={{background:color+"22",color,border:`1px solid ${color}44`,padding:small?`3px 8px`:`${T.sp1}px ${T.sp3}px`,fontSize:small?T.fs1:T.fs2,letterSpacing:0.5,fontFamily:T.sans,whiteSpace:"nowrap",borderRadius:T.r1}}>{label}</span>;
-const Btn=({ch,onClick,active,color=T.gold,compact,style={},disabled})=><button onClick={disabled?undefined:onClick} style={{background:active?color+"22":"transparent",color:disabled?T.textDim:(active?color:T.textDim),border:active?`2px solid ${color}`:`1px solid ${T.border}`,padding:compact?`8px ${T.sp3}px`:`${T.sp3}px ${T.sp4}px`,fontSize:compact?T.fs2:T.fs3,letterSpacing:1,cursor:disabled?"default":"pointer",fontFamily:T.sans,textTransform:"uppercase",whiteSpace:"nowrap",fontWeight:active?"bold":"normal",transition:"all 0.15s ease",borderRadius:T.r2,minHeight:T.touch,...style}}>{ch}</button>;
+const Btn=({ch,onClick,active,color=T.gold,compact,style={},disabled})=><button onClick={disabled?undefined:onClick} style={{background:active?color+"22":"rgba(210,175,120,0.06)",color:disabled?T.textDim:(active?color:T.text),border:active?`2px solid ${color}`:`1px solid rgba(210,175,120,0.12)`,padding:compact?`8px ${T.sp3}px`:`${T.sp3}px ${T.sp4}px`,fontSize:compact?T.fs2:T.fs3,letterSpacing:1,cursor:disabled?"default":"pointer",fontFamily:T.sans,textTransform:"uppercase",whiteSpace:"nowrap",fontWeight:active?"bold":"normal",transition:"all 0.15s ease",borderRadius:T.r1,minHeight:T.touch,...style}}>{ch}</button>;
 
 function Tip({ text, step }) {
   const [open, setOpen] = useState(false);
@@ -792,7 +794,7 @@ function HideoutManager({ apiHideout, hideoutLevels, saveHideoutLevels, hideoutT
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
         <button onClick={onBack} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: T.fs3, letterSpacing: 1, cursor: "pointer", fontFamily: T.sans, padding: 0, marginBottom: 8 }}>← BACK</button>
-        <SL c={<>HIDEOUT UPGRADES<Tip text="Set your current hideout levels, then pick which upgrade you're working toward. The Squad tab will recommend maps where you're most likely to find the items you need." /></>} />
+        <SL c={<>HIDEOUT UPGRADES<Tip text="Set your current hideout levels, then pick which upgrade you're working toward. The Raid tab will recommend maps where you're most likely to find the items you need." /></>} />
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
         {/* Target upgrade selection */}
@@ -1011,7 +1013,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiTraders, apiMa
 
       {/* Expanded breakdown */}
       {expanded && (
-        <div style={{ background: "#181818", border: `1px solid ${T.cyanBorder}`, borderTop: "none", padding: 12 }}>
+        <div style={{ background: T.inputBg, border: `1px solid ${T.cyanBorder}`, borderTop: "none", padding: 12 }}>
           {/* Mode toggle — 3 options */}
           <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
             {[
@@ -1111,7 +1113,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiTraders, apiMa
             </>;
           })()}
           {mode === "hideout" && !hasItemData && (
-            <div style={{ fontSize: T.fs3, color: T.textDim, textAlign: "center", padding: 12 }}>Set a hideout target in My Profile → Hideout to enable this.</div>
+            <div style={{ fontSize: T.fs3, color: T.textDim, textAlign: "center", padding: 12 }}>Set a hideout target in Tasks → Hideout to enable this.</div>
           )}
 
           {/* LOOKING FOR MODE */}
@@ -1201,7 +1203,7 @@ function MapRecommendation({ allProfiles, activeIds, apiTasks, apiTraders, apiMa
 }
 
 // ─── EXTRACT SELECTOR ─────────────────────────────────────────────────────
-// Called per-player inside the Squad planning screen after map selection
+// Called per-player inside the Raid planning screen after map selection
 function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
   const [pendingExtract, setPendingExtract] = useState(null); // extract being confirmed
   const [itemChecks, setItemChecks] = useState({}); // {itemName: true/false}
@@ -1397,7 +1399,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           </button>
         ))}
       </div>
-      <div ref={mapRef} style={{ position: "relative", background: "#181818", border: `1px solid ${T.border}` }}>
+      <div ref={mapRef} style={{ position: "relative", background: T.inputBg, border: `1px solid ${T.border}` }}>
         {hoveredNode && (
           <div style={{ position: "absolute", left: hoveredNode.x + 12, top: hoveredNode.y - 28, background: "rgba(13,17,23,0.95)", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.mono, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 10 }}>{hoveredNode.label}</div>
         )}
@@ -1558,7 +1560,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           <div style={{ fontSize: T.fs2, color: T.textBright, marginBottom: 8 }}>{c.label}</div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => onConflictResolve(c.id, "merge")} style={{ flex: 1, background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "7px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans }}>✓ MERGE</button>
-            <button onClick={() => onConflictResolve(c.id, "separate")} style={{ flex: 1, background: "#181818", border: `1px solid ${T.blueBorder}`, color: T.blue, padding: "7px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans }}>⇄ TWO STOPS</button>
+            <button onClick={() => onConflictResolve(c.id, "separate")} style={{ flex: 1, background: T.inputBg, border: `1px solid ${T.blueBorder}`, color: T.blue, padding: "7px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans }}>⇄ TWO STOPS</button>
           </div>
         </div>
       ))}
@@ -1662,7 +1664,7 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
   const key = p => `${p.playerId}-${p.taskId}-${p.objId}`;
   const set = (k, v) => setUpdates(u => ({ ...u, [k]: v }));
   return (
-    <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(20,20,20,0.97)", zIndex: 70, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(13,14,16,0.94)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 70, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 14px", flexShrink: 0 }}>
         <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 4 }}>POST-RAID — MY PROGRESS</div>
         <div style={{ fontSize: T.fs4, color: T.textBright, fontWeight: "bold" }}>How did your raid go?</div>
@@ -1705,29 +1707,18 @@ function PostRaidTracker({ route, myProfile, onSave, onClose }) {
   );
 }
 
-// ─── MY PROFILE TAB ──────────────────────────────────────────────────────
-function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, apiError, apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget, onRouteTask }) {
-  const [screen, setScreen] = useState("profile");
-  const [profileSub, setProfileSub] = useState("profile"); // "profile" | "tasks" | "hideout" | "chains"
+// ─── TASKS TAB ───────────────────────────────────────────────────────────
+function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, apiError, apiHideout, hideoutLevels, saveHideoutLevels, hideoutTarget, saveHideoutTarget, onRouteTask }) {
+  const [profileSub, setProfileSub] = useState("tasks"); // "tasks" | "browse" | "hideout" | "chains"
   const [chainTrader, setChainTrader] = useState("all");
   const [expandedChainNodes, setExpandedChainNodes] = useState(new Set());
   const [taskSearch, setTaskSearch] = useState("");
   const [taskTrader, setTaskTrader] = useState("all");
   const [taskMapFilter, setTaskMapFilter] = useState("all");
-  const [copied, setCopied] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [showRestore, setShowRestore] = useState(false);
   const [expandedTask, setExpandedTask] = useState(null);
   const [taskGroupBy, setTaskGroupBy] = useState("trader"); // "az", "trader", "map"
-  const [restoreCode, setRestoreCode] = useState("");
-  const [restoreError, setRestoreError] = useState("");
   const [hideoutPrereq, setHideoutPrereq] = useState(null);
   const [expandedStation, setExpandedStation] = useState(null);
-
-  const copyCode = () => {
-    const code = encodeProfile(myProfile); if (!code) return;
-    try { navigator.clipboard.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }).catch(() => { const ta = document.createElement("textarea"); ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopied(true); setTimeout(() => setCopied(false), 2500); }); } catch(e) {}
-  };
 
   const traders = [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort);
   const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
@@ -1758,178 +1749,51 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
     saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
   };
 
-  if (screen === "hideout") return (
-    <HideoutManager
-      apiHideout={apiHideout}
-      hideoutLevels={hideoutLevels}
-      saveHideoutLevels={saveHideoutLevels}
-      hideoutTarget={hideoutTarget}
-      saveHideoutTarget={saveHideoutTarget}
-      onBack={() => setScreen("profile")}
-    />
-  );
-
-  if (screen === "browsetasks") {
-    const traderTaskCounts = {};
-    traders.forEach(tr => {
-      const trTasks = (apiTasks || []).filter(t => t.trader?.name === tr);
-      const addedCount = trTasks.filter(t => myProfile.tasks?.some(mt => mt.taskId === t.id)).length;
-      traderTaskCounts[tr] = { total: trTasks.length, added: addedCount };
-    });
-    // When a specific trader is selected, don't cap at 50
-    const browseLimit = taskTrader !== "all" ? 999 : 50;
-    const browseTasks = (apiTasks || []).filter(t => {
-      if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
-      if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
-      if (taskSearch && !t.name.toLowerCase().includes(taskSearch.toLowerCase())) return false;
-      return true;
-    }).sort((a, b) => a.name.localeCompare(b.name)).slice(0, browseLimit);
-    const addAllForTrader = (traderName) => {
-      const trTasks = (apiTasks || []).filter(t => t.trader?.name === traderName);
-      let allTasks = [...(myProfile.tasks || [])];
-      let newProgress = { ...(myProfile.progress || {}) };
-      trTasks.forEach(task => {
-        if (!allTasks.some(t => t.taskId === task.id)) allTasks.push({ taskId: task.id });
-        const prereqIds = [...new Set(getAllPrereqTaskIds(task.id, apiTasks))];
-        prereqIds.forEach(prereqId => {
-          const prereqTask = apiTasks?.find(t => t.id === prereqId);
-          if (prereqTask) newProgress = markTaskCompleteInProgress(myProfile.id, prereqId, prereqTask, newProgress);
-        });
+  // Browse tasks data (always computed, used by Browse sub-tab)
+  const traderTaskCounts = {};
+  traders.forEach(tr => {
+    const trTasks = (apiTasks || []).filter(t => t.trader?.name === tr);
+    const addedCount = trTasks.filter(t => myProfile.tasks?.some(mt => mt.taskId === t.id)).length;
+    traderTaskCounts[tr] = { total: trTasks.length, added: addedCount };
+  });
+  const browseLimit = taskTrader !== "all" ? 999 : 50;
+  const browseTasks = (apiTasks || []).filter(t => {
+    if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
+    if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
+    if (taskSearch && !t.name.toLowerCase().includes(taskSearch.toLowerCase())) return false;
+    return true;
+  }).sort((a, b) => a.name.localeCompare(b.name)).slice(0, browseLimit);
+  const addAllForTrader = (traderName) => {
+    const trTasks = (apiTasks || []).filter(t => t.trader?.name === traderName);
+    let allTasks = [...(myProfile.tasks || [])];
+    let newProgress = { ...(myProfile.progress || {}) };
+    trTasks.forEach(task => {
+      if (!allTasks.some(t => t.taskId === task.id)) allTasks.push({ taskId: task.id });
+      const prereqIds = [...new Set(getAllPrereqTaskIds(task.id, apiTasks))];
+      prereqIds.forEach(prereqId => {
+        const prereqTask = apiTasks?.find(t => t.id === prereqId);
+        if (prereqTask) newProgress = markTaskCompleteInProgress(myProfile.id, prereqId, prereqTask, newProgress);
       });
-      saveMyProfile({ ...myProfile, tasks: allTasks, progress: newProgress });
-    };
-    const removeAllForTrader = (traderName) => {
-      const trTaskIds = new Set((apiTasks || []).filter(t => t.trader?.name === traderName).map(t => t.id));
-      const newTasks = (myProfile.tasks || []).filter(t => !trTaskIds.has(t.taskId));
-      const newProgress = cleanOrphanedPrereqProgress(myProfile.id, newTasks, apiTasks, myProfile.progress || {});
-      saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
-    };
-    return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-        <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <button onClick={() => setScreen("profile")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: T.fs3, letterSpacing: 1, cursor: "pointer", fontFamily: T.sans, padding: 0 }}>← BACK</button>
-            <div style={{ fontSize: T.fs2, color: T.textDim, fontFamily: T.sans }}>{myProfile.tasks?.length || 0} selected</div>
-          </div>
-          <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." style={{ width: "100%", background: "#181818", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
-          <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 6, fontFamily: T.sans }}>TRADERS<Tip text="Tap a trader to see their tasks. Use 'ADD ALL' to grab every task from that trader, or add them one by one." /></div>
-          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-            <button onClick={() => setTaskTrader("all")} style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: T.fs2, fontFamily: T.sans,
-              background: taskTrader === "all" ? T.gold + "22" : "transparent",
-              border: `2px solid ${taskTrader === "all" ? T.gold : T.border}`,
-              color: taskTrader === "all" ? T.gold : T.textDim, cursor: "pointer",
-            }}>All</button>
-            {traders.map(tr => {
-              const counts = traderTaskCounts[tr] || { total: 0, added: 0 };
-              const allAdded = counts.added === counts.total && counts.total > 0;
-              const isActive = taskTrader === tr;
-              const clr = allAdded ? T.success : T.gold;
-              return (
-                <button key={tr} onClick={() => setTaskTrader(tr)} style={{
-                  display: "flex", alignItems: "center", gap: 5, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans,
-                  background: isActive ? clr + "22" : "transparent",
-                  border: `2px solid ${isActive ? clr : T.border}`,
-                  color: isActive ? clr : T.textDim, cursor: "pointer",
-                }}>
-                  {traderImgMap[tr] && <img src={traderImgMap[tr]} alt={tr} style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover" }} />}
-                  <span>{tr} ({counts.added}/{counts.total})</span>
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <Btn ch="All Maps" compact active={taskMapFilter === "all"} onClick={() => setTaskMapFilter("all")} />
-            {taskMaps.map(m => <Btn key={m} ch={m.split(" ")[0]} compact active={taskMapFilter === m} onClick={() => setTaskMapFilter(m)} />)}
-          </div>
-        </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-          {loading && <div style={{ color: T.textDim, fontSize: T.fs4, textAlign: "center", padding: 20 }}>Loading live data from tarkov.dev...</div>}
-          {apiError && <div style={{ color: T.error, fontSize: T.fs4, textAlign: "center", padding: 20 }}>Could not reach tarkov.dev. Check connection.</div>}
-          {/* ADD ALL / REMOVE ALL for selected trader */}
-          {taskTrader !== "all" && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              {(traderTaskCounts[taskTrader]?.added || 0) < (traderTaskCounts[taskTrader]?.total || 0) && (
-                <button onClick={() => addAllForTrader(taskTrader)} style={{ flex: 1, background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>+ ADD ALL {taskTrader.toUpperCase()}</button>
-              )}
-              {(traderTaskCounts[taskTrader]?.added || 0) > 0 && (
-                <button onClick={() => removeAllForTrader(taskTrader)} style={{ flex: 1, background: T.errorBg, border: `2px solid ${T.errorBorder}`, color: T.error, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>✕ REMOVE ALL</button>
-              )}
-            </div>
-          )}
-          <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}<Tip text="Tap the ↗ icon next to any task name to open its wiki page for detailed walkthroughs and tips." /></div>
-          {(() => {
-            const myPrereqIds = new Set();
-            (myProfile.tasks || []).forEach(({ taskId }) => { getAllPrereqTaskIds(taskId, apiTasks).forEach(id => myPrereqIds.add(id)); });
-            // Count how many tasks each task unlocks
-            const unlocksMap = {};
-            (apiTasks || []).forEach(t => {
-              (t.taskRequirements || []).forEach(req => {
-                if (req.status?.includes("complete") && req.task?.id) {
-                  unlocksMap[req.task.id] = (unlocksMap[req.task.id] || 0) + 1;
-                }
-              });
-            });
-            return browseTasks.map(task => {
-            const added = myProfile.tasks?.some(t => t.taskId === task.id);
-            const prereqDone = !added && myPrereqIds.has(task.id);
-            return (
-              <div key={task.id} style={{ background: prereqDone ? T.successBg : T.surface, border: `1px solid ${added ? myProfile.color : prereqDone ? T.successBorder : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : prereqDone ? T.success : T.border}`, padding: 10, marginBottom: 6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                  <div style={{ color: prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
-                  {prereqDone ? (
-                    <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1, flexShrink: 0 }}>PREREQ ✓</span>
-                  ) : (
-                    <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
-                  {taskTrader === "all" && <Badge label={task.trader?.name || "?"} color={T.textDim} />}
-                  {task.map && <Badge label={task.map.name} color={T.blue} />}
-                  {task.minPlayerLevel > 1 && <Badge label={`Lvl ${task.minPlayerLevel}+`} color={T.textDim} />}
-                  <Badge label={`${(task.objectives || []).filter(o => !o.optional).length} obj`} color={T.textDim} />
-                  {unlocksMap[task.id] > 0 && <Badge label={`unlocks ${unlocksMap[task.id]}`} color={T.cyan} />}
-                  {(task.objectives || []).some(o => o.zones?.length > 0 || o.possibleLocations?.length > 0) && <Badge label="has pins" color={T.success} />}
-                </div>
-                {task.objectives?.filter(o => !o.optional).slice(0, 2).map(obj => <div key={obj.id} style={{ fontSize: T.fs3, color: T.textDim, marginTop: 2 }}>{getObjMeta(obj).icon} {obj.description}</div>)}
-              </div>
-            );
-          });
-          })()}
-          {!loading && browseTasks.length === 0 && (
-            <div style={{ textAlign: "center", padding: 20, color: T.textDim, fontSize: T.fs3 }}>
-              No tasks match your filters. Try a different trader or clear your search.
-            </div>
-          )}
-          <div style={{ height: 20 }} />
-        </div>
-      </div>
-    );
-  }
+    });
+    saveMyProfile({ ...myProfile, tasks: allTasks, progress: newProgress });
+  };
+  const removeAllForTrader = (traderName) => {
+    const trTaskIds = new Set((apiTasks || []).filter(t => t.trader?.name === traderName).map(t => t.id));
+    const newTasks = (myProfile.tasks || []).filter(t => !trTaskIds.has(t.taskId));
+    const newProgress = cleanOrphanedPrereqProgress(myProfile.id, newTasks, apiTasks, myProfile.progress || {});
+    saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
+  };
 
   const subTabs = [
-    { id: "profile", label: "Profile", icon: "▲" },
-    { id: "tasks", label: `Tasks (${myProfile.tasks?.length || 0})`, icon: "★" },
+    { id: "tasks", label: `My Tasks (${myProfile.tasks?.length || 0})`, icon: "★" },
+    { id: "browse", label: "Browse", icon: "+" },
     { id: "chains", label: "Trees", icon: "⛓" },
     { id: "hideout", label: "Hideout", icon: "◈" },
   ];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "12px 14px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: myProfile.color + "33", border: `2px solid ${myProfile.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: T.fs4, color: myProfile.color, flexShrink: 0 }}>{myProfile.name?.[0]?.toUpperCase() || "?"}</div>
-          {editingName ? (
-            <input autoFocus value={myProfile.name || ""} onChange={e => saveMyProfile({ ...myProfile, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={e => e.key === "Enter" && setEditingName(false)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${myProfile.color}`, color: myProfile.color, fontSize: T.fs4, fontFamily: T.sans, outline: "none", padding: "2px 0" }} />
-          ) : (
-            <div style={{ flex: 1, color: myProfile.color, fontSize: T.fs4, fontWeight: "bold", cursor: "pointer" }} onClick={() => setEditingName(true)}>
-              {myProfile.name || "Tap to set name"}<span style={{ fontSize: T.fs2, color: T.textDim, fontWeight: "normal", marginLeft: 6 }}>✎</span>
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          {PLAYER_COLORS.map((col, i) => <button key={i} onClick={() => saveMyProfile({ ...myProfile, color: col })} style={{ width: 24, height: 24, borderRadius: "50%", background: col, cursor: "pointer", border: myProfile.color === col ? "2px solid #d8d0c0" : "2px solid transparent", padding: 0 }} />)}
-        </div>
+      <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
         {/* Sub-tabs */}
         <div style={{ display: "flex", gap: 4 }}>
           {subTabs.map(st => (
@@ -1946,53 +1810,103 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {/* ── PROFILE SUB-TAB ── */}
-        {profileSub === "profile" && (
+        {/* ── BROWSE SUB-TAB ── */}
+        {profileSub === "browse" && (
           <>
-            {/* Get started card for new users */}
-            {(!myProfile.name || !(myProfile.tasks || []).length) && (
-              <div style={{ background: T.gold + "11", border: `2px solid ${T.gold}44`, borderRadius: T.r1, padding: T.sp4, marginBottom: T.sp4 }}>
-                <div style={{ fontSize: T.fs5, color: T.gold, fontWeight: "bold", letterSpacing: 1, marginBottom: T.sp2 }}>GET STARTED</div>
-                <div style={{ fontSize: T.fs3, color: T.text, lineHeight: 1.8, marginBottom: T.sp3 }}>
-                  {!myProfile.name && <div style={{ color: T.gold }}>1. Set your name above</div>}
-                  {myProfile.name && <div style={{ color: T.success }}>1. Name set ✓</div>}
-                  {!(myProfile.tasks || []).length ? <div style={{ color: T.gold }}>2. Go to Tasks tab and add your active quests</div> : <div style={{ color: T.success }}>2. Tasks added ✓</div>}
-                  <div style={{ color: T.textDim }}>3. Copy your share code and head to Squad tab</div>
-                </div>
-                {myProfile.name && !(myProfile.tasks || []).length && (
-                  <button onClick={() => setScreen("browsetasks")} style={{ width: "100%", background: T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs3, fontWeight: "bold", letterSpacing: 1, cursor: "pointer", fontFamily: T.sans, borderRadius: T.r2 }}>+ BROWSE TASKS</button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: T.fs2, color: T.textDim, fontFamily: T.sans }}>{myProfile.tasks?.length || 0} selected</div>
+            </div>
+            <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 6, fontFamily: T.sans }}>TRADERS<Tip text="Tap a trader to see their tasks. Use 'ADD ALL' to grab every task from that trader, or add them one by one." /></div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+              <button onClick={() => setTaskTrader("all")} style={{
+                display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", fontSize: T.fs2, fontFamily: T.sans,
+                background: taskTrader === "all" ? T.gold + "22" : "transparent",
+                border: `2px solid ${taskTrader === "all" ? T.gold : T.border}`,
+                color: taskTrader === "all" ? T.gold : T.textDim, cursor: "pointer",
+              }}>All</button>
+              {traders.map(tr => {
+                const counts = traderTaskCounts[tr] || { total: 0, added: 0 };
+                const allAdded = counts.added === counts.total && counts.total > 0;
+                const isActive = taskTrader === tr;
+                const clr = allAdded ? T.success : T.gold;
+                return (
+                  <button key={tr} onClick={() => setTaskTrader(tr)} style={{
+                    display: "flex", alignItems: "center", gap: 5, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans,
+                    background: isActive ? clr + "22" : "transparent",
+                    border: `2px solid ${isActive ? clr : T.border}`,
+                    color: isActive ? clr : T.textDim, cursor: "pointer",
+                  }}>
+                    {traderImgMap[tr] && <img src={traderImgMap[tr]} alt={tr} style={{ width: 22, height: 22, borderRadius: "50%", objectFit: "cover" }} />}
+                    <span>{tr} ({counts.added}/{counts.total})</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+              <Btn ch="All Maps" compact active={taskMapFilter === "all"} onClick={() => setTaskMapFilter("all")} />
+              {taskMaps.map(m => <Btn key={m} ch={m.split(" ")[0]} compact active={taskMapFilter === m} onClick={() => setTaskMapFilter(m)} />)}
+            </div>
+            {loading && <div style={{ color: T.textDim, fontSize: T.fs4, textAlign: "center", padding: 20 }}>Loading live data from tarkov.dev...</div>}
+            {apiError && <div style={{ color: T.error, fontSize: T.fs4, textAlign: "center", padding: 20 }}>Could not reach tarkov.dev. Check connection.</div>}
+            {taskTrader !== "all" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                {(traderTaskCounts[taskTrader]?.added || 0) < (traderTaskCounts[taskTrader]?.total || 0) && (
+                  <button onClick={() => addAllForTrader(taskTrader)} style={{ flex: 1, background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>+ ADD ALL {taskTrader.toUpperCase()}</button>
+                )}
+                {(traderTaskCounts[taskTrader]?.added || 0) > 0 && (
+                  <button onClick={() => removeAllForTrader(taskTrader)} style={{ flex: 1, background: T.errorBg, border: `2px solid ${T.errorBorder}`, color: T.error, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>✕ REMOVE ALL</button>
                 )}
               </div>
             )}
-            <SL c={<>YOUR SHARE CODE<Tip text="Copy this code and paste it in Discord before each raid. Your squadmates paste it in their Squad tab to import your profile and tasks." /></>} />
-            <div style={{ background: T.surface, border: `1px solid ${myProfile.color}44`, borderLeft: `2px solid ${myProfile.color}`, padding: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.7, marginBottom: 10 }}>Copy your code and paste it in Discord before each raid. Teammates import it in the Squad tab — no account needed.</div>
-              <div style={{ background: "#181818", border: `1px solid ${T.border}`, padding: "8px 10px", marginBottom: 8, fontSize: T.fs2, color: T.textDim, fontFamily: T.mono, wordBreak: "break-all", lineHeight: 1.5 }}>{myProfile.tasks?.length > 0 ? encodeProfile(myProfile)?.slice(0, 60) + "..." : "Add tasks to generate your code"}</div>
-              <button onClick={copyCode} disabled={!myProfile.tasks?.length} style={{ width: "100%", background: copied ? T.successBg : myProfile.color + "22", border: `2px solid ${copied ? T.successBorder : myProfile.color}`, color: copied ? T.success : myProfile.color, padding: "10px 0", fontSize: T.fs2, cursor: myProfile.tasks?.length ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>
-                {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY MY CODE"}
-              </button>
-              {!myProfile.tasks?.length && <div style={{ fontSize: T.fs2, color: T.textDim, textAlign: "center", marginTop: 6 }}>Add tasks in the Tasks tab first</div>}
-              <button onClick={() => setShowRestore(!showRestore)} style={{ width: "100%", background: showRestore ? T.successBg : T.blueBg, border: `2px solid ${showRestore ? T.successBorder : T.blueBorder}`, color: showRestore ? T.success : T.blue, fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, marginTop: 8, padding: "8px 0", textTransform: "uppercase" }}>{showRestore ? "▾ HIDE RESTORE" : "▸ RESTORE PROFILE FROM CODE"}</button>
-              {showRestore && (
-                <div style={{ background: "#181818", border: `1px solid ${T.border}`, padding: 10, marginTop: 4 }}>
-                  <div style={{ fontSize: T.fs2, color: T.textDim, lineHeight: 1.5, marginBottom: 8 }}>Paste a share code to restore your profile on this device — name, color, tasks, and progress will all transfer.</div>
-                  <textarea value={restoreCode} onChange={e => setRestoreCode(e.target.value)} placeholder="Paste your TG2:... code here"
-                    style={{ width: "100%", background: "#181818", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 6 }} />
-                  {restoreError && <div style={{ fontSize: T.fs2, color: T.error, marginBottom: 6 }}>{restoreError}</div>}
-                  <button onClick={() => {
-                    setRestoreError("");
-                    const decoded = decodeProfile(restoreCode.trim());
-                    if (!decoded) { setRestoreError("Invalid code — check for typos."); return; }
-                    saveMyProfile({ ...myProfile, name: decoded.name, color: decoded.color, tasks: decoded.tasks, progress: decoded.progress });
-                    setRestoreCode(""); setShowRestore(false);
-                  }} disabled={!restoreCode.trim()} style={{ width: "100%", background: restoreCode.trim() ? T.successBg : "transparent", border: `2px solid ${restoreCode.trim() ? T.successBorder : T.border}`, color: restoreCode.trim() ? T.success : T.textDim, padding: "10px 0", fontSize: T.fs2, cursor: restoreCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1 }}>RESTORE MY PROFILE</button>
-                </div>
-              )}
-            </div>
+            <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, marginBottom: 10 }}>{browseTasks.length} TASKS{taskTrader !== "all" ? ` · ${taskTrader.toUpperCase()}` : " · LIVE FROM TARKOV.DEV"}<Tip text="Tap the ↗ icon next to any task name to open its wiki page for detailed walkthroughs and tips." /></div>
+            {(() => {
+              const myPrereqIds = new Set();
+              (myProfile.tasks || []).forEach(({ taskId }) => { getAllPrereqTaskIds(taskId, apiTasks).forEach(id => myPrereqIds.add(id)); });
+              const unlocksMap = {};
+              (apiTasks || []).forEach(t => {
+                (t.taskRequirements || []).forEach(req => {
+                  if (req.status?.includes("complete") && req.task?.id) {
+                    unlocksMap[req.task.id] = (unlocksMap[req.task.id] || 0) + 1;
+                  }
+                });
+              });
+              return browseTasks.map(task => {
+                const added = myProfile.tasks?.some(t => t.taskId === task.id);
+                const prereqDone = !added && myPrereqIds.has(task.id);
+                return (
+                  <div key={task.id} style={{ background: prereqDone ? T.successBg : T.surface, border: `1px solid ${added ? myProfile.color : prereqDone ? T.successBorder : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : prereqDone ? T.success : T.border}`, padding: 10, marginBottom: 6 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+                      <div style={{ color: prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                      {prereqDone ? (
+                        <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1, flexShrink: 0 }}>PREREQ ✓</span>
+                      ) : (
+                        <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
+                      {taskTrader === "all" && <Badge label={task.trader?.name || "?"} color={T.textDim} />}
+                      {task.map && <Badge label={task.map.name} color={T.blue} />}
+                      {task.minPlayerLevel > 1 && <Badge label={`Lvl ${task.minPlayerLevel}+`} color={T.textDim} />}
+                      <Badge label={`${(task.objectives || []).filter(o => !o.optional).length} obj`} color={T.textDim} />
+                      {unlocksMap[task.id] > 0 && <Badge label={`unlocks ${unlocksMap[task.id]}`} color={T.cyan} />}
+                      {(task.objectives || []).some(o => o.zones?.length > 0 || o.possibleLocations?.length > 0) && <Badge label="has pins" color={T.success} />}
+                    </div>
+                    {task.objectives?.filter(o => !o.optional).slice(0, 2).map(obj => <div key={obj.id} style={{ fontSize: T.fs3, color: T.textDim, marginTop: 2 }}>{getObjMeta(obj).icon} {obj.description}</div>)}
+                  </div>
+                );
+              });
+            })()}
+            {!loading && browseTasks.length === 0 && (
+              <div style={{ textAlign: "center", padding: 20, color: T.textDim, fontSize: T.fs3 }}>
+                No tasks match your filters. Try a different trader or clear your search.
+              </div>
+            )}
+            <div style={{ height: 20 }} />
           </>
         )}
 
-        {/* ── TASKS SUB-TAB ── */}
+        {/* ── MY TASKS SUB-TAB ── */}
         {profileSub === "tasks" && (() => {
           const myTasksWithApi = (myProfile.tasks || []).map(t => {
             const apiTask = apiTasks?.find(x => x.id === t.taskId);
@@ -2073,7 +1987,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <SL c={<>MY TASKS ({myProfile.tasks?.length || 0})<Tip text="Browse and add the tasks you're currently working on. These get included in your share code so your squad knows what objectives you need to hit." /></>} s={{ marginBottom: 0 }} />
-                <button onClick={() => setScreen("browsetasks")} style={{ background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "6px 12px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>+ BROWSE TASKS</button>
+                <button onClick={() => setProfileSub("browse")} style={{ background: myProfile.color + "22", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "6px 12px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>+ BROWSE TASKS</button>
               </div>
               {myProfile.tasks?.length > 0 && (
                 <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
@@ -2088,7 +2002,7 @@ function MyProfileTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading,
               {!myProfile.tasks?.length && (
                 <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 20, textAlign: "center", marginBottom: 12 }}>
                   <div style={{ fontSize: T.fs2, color: T.textDim, marginBottom: 8 }}>No tasks added yet</div>
-                  <button onClick={() => setScreen("browsetasks")} style={{ background: "transparent", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>BROWSE ALL TASKS →</button>
+                  <button onClick={() => setProfileSub("browse")} style={{ background: "transparent", border: `2px solid ${myProfile.color}`, color: myProfile.color, padding: "8px 16px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>BROWSE ALL TASKS →</button>
                 </div>
               )}
               {groups.map(g => {
@@ -2610,8 +2524,8 @@ function useSquadRoom(myProfile) {
   };
 }
 
-// ─── SQUAD TAB ────────────────────────────────────────────────────────────
-function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loading, apiError, hideoutTarget, apiHideout, hideoutLevels, pendingRouteTask, clearPendingRouteTask }) {
+// ─── RAID TAB ─────────────────────────────────────────────────────────────
+function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loading, apiError, hideoutTarget, apiHideout, hideoutLevels, pendingRouteTask, clearPendingRouteTask }) {
   const [importCode, setImportCode] = useState("");
   const [importError, setImportError] = useState("");
   const [importedSquad, saveImportedSquad] = useStorage("tg-squad-v3", []);
@@ -3219,7 +3133,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
             ) : (
               <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 20, textAlign: "center" }}>
                 <div style={{ fontSize: T.fs2, color: T.textDim, marginBottom: 8 }}>No incomplete tasks found.</div>
-                <div style={{ fontSize: T.fs3, color: T.textDim }}>Add tasks in <span style={{ color: T.gold }}>My Profile → Tasks</span> to get a recommendation.</div>
+                <div style={{ fontSize: T.fs3, color: T.textDim }}>Add tasks in the <span style={{ color: T.gold }}>Tasks</span> tab to get a recommendation.</div>
                 <button onClick={() => setPlannerView("full")} style={{ marginTop: 14, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "10px 20px", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ OPEN FULL PLANNER</button>
               </div>
             );
@@ -3246,7 +3160,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                     setPriorityTasks(computeQuickTasks(allProfiles, m.id, filteredApiTasks, tasksPerPerson));
                     setExtractChoices({});
                     setQuickGenPending(true);
-                  }} style={{ background: isTop ? T.gold + "15" : "#181818", border: `1px solid ${isTop ? T.gold + "66" : T.border}`, color: isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
+                  }} style={{ background: isTop ? T.gold + "15" : T.inputBg, border: `1px solid ${isTop ? T.gold + "66" : T.border}`, color: isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
                     {m.name}
                     {taskCount > 0 && <div style={{ fontSize: T.fs2, color: T.gold, marginTop: 2 }}>{taskCount} task{taskCount !== 1 ? "s" : ""}</div>}
                   </button>
@@ -3296,7 +3210,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                       setActiveIds(qIds);
                       setExtractChoices({});
                       setQuickGenPending(true);
-                    }} style={{ background: accent ? accent + "15" : "#181818", border: `1px solid ${accent ? accent + "66" : T.purple + "33"}`, color: accent || T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
+                    }} style={{ background: accent ? accent + "15" : T.inputBg, border: `1px solid ${accent ? accent + "66" : T.purple + "33"}`, color: accent || T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
                       {m.name}
                       {isTopLoot && <div style={{ fontSize: 14, color: T.purple, marginTop: 2 }}>★ BEST LOOT</div>}
                       {isHideoutRec && <div style={{ fontSize: 14, color: T.cyan, marginTop: 2 }}>◈ HIDEOUT</div>}
@@ -3510,7 +3424,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                 const isSel = selectedMapId === m.id;
                 const isTaskRec = taskTopId === m.id && !isSel;
                 const isHideoutRec = hideoutTopId === m.id && hideoutTopId !== taskTopId && !isSel;
-                const bg = isSel ? T.gold + "33" : isTaskRec ? T.gold + "11" : isHideoutRec ? T.cyan + "11" : "#181818";
+                const bg = isSel ? T.gold + "33" : isTaskRec ? T.gold + "11" : isHideoutRec ? T.cyan + "11" : T.inputBg;
                 const border = isSel ? T.gold : isTaskRec ? T.gold + "66" : isHideoutRec ? T.cyan + "66" : T.border;
                 const color = isSel ? T.gold : isTaskRec ? T.gold : isHideoutRec ? T.cyan : T.textDim;
                 return (
@@ -3573,7 +3487,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                 </div>
               </div>
               {/* Leader controls */}
-              <div style={{ background: room.hasLeader ? T.successBg : "#181818", border: `1px solid ${room.hasLeader ? T.successBorder : T.border}`, padding: 8, marginBottom: 8 }}>
+              <div style={{ background: room.hasLeader ? T.successBg : T.inputBg, border: `1px solid ${room.hasLeader ? T.successBorder : T.border}`, padding: 8, marginBottom: 8 }}>
                 {room.hasLeader ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
@@ -3613,7 +3527,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="ALPHA-123"
-                  style={{ flex: 1, background: "#181818", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", letterSpacing: 1, textTransform: "uppercase" }} />
+                  style={{ flex: 1, background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", letterSpacing: 1, textTransform: "uppercase" }} />
                 <button onClick={() => room.joinRoom(joinCode)} disabled={!joinCode.trim() || room.status === "joining"} style={{ background: joinCode.trim() ? T.blueBg : "transparent", border: `1px solid ${joinCode.trim() ? T.blueBorder : T.border}`, color: joinCode.trim() ? T.blue : T.textDim, padding: "8px 14px", fontSize: T.fs3, cursor: joinCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1 }}>{room.status === "joining" ? "..." : "JOIN"}</button>
               </div>
               {room.error && <div style={{ fontSize: T.fs3, color: T.error, marginTop: 6 }}>{room.error}</div>}
@@ -3622,11 +3536,11 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
         </div>
 
         {/* Import squadmate (fallback) */}
-        <SL c={<>IMPORT SQUADMATE CODE<Tip step="FALLBACK" text="If a squadmate can't join the room, they can still share their code the old way — copy from My Profile, paste here." /></>} />
+        <SL c={<>IMPORT SQUADMATE CODE<Tip step="FALLBACK" text="If a squadmate can't join the room, they can still share their code the old way — copy from the Profile tab, paste here." /></>} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.6, marginBottom: 8 }}>Ask each squadmate to copy their code from My Profile and paste it in Discord.</div>
+          <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.6, marginBottom: 8 }}>Ask each squadmate to copy their code from the Profile tab and paste it in Discord.</div>
           <textarea value={importCode} onChange={e => setImportCode(e.target.value)} placeholder="Paste squadmate's TG2:... code here"
-            style={{ width: "100%", background: "#181818", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 8 }} />
+            style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 8 }} />
           {importError && <div style={{ fontSize: T.fs3, color: T.error, marginBottom: 6 }}>{importError}</div>}
           <button onClick={handleImport} disabled={!importCode.trim()} style={{ width: "100%", background: importCode.trim() ? T.blueBg : "transparent", border: `1px solid ${importCode.trim() ? T.blueBorder : T.border}`, color: importCode.trim() ? T.blue : T.textDim, padding: "10px 0", fontSize: T.fs2, cursor: importCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase" }}>↓ IMPORT SQUADMATE</button>
         </div>
@@ -3653,7 +3567,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                 <>
                   <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 5 }}>PRIORITY TASKS THIS RAID (up to {tasksPerPerson}):</div>
                   {mapTasks.length === 0 ? (
-                    <div style={{ fontSize: T.fs3, color: T.textDim }}>No tasks for this map{isMe ? " — add them in My Profile." : "."}</div>
+                    <div style={{ fontSize: T.fs3, color: T.textDim }}>No tasks for this map{isMe ? " — add them in the Tasks tab." : "."}</div>
                   ) : mapTasks.map(t => {
                     const at = apiTasks?.find(x => x.id === t.taskId); if (!at) return null;
                     const selected = priorityTasks[p.id] || [];
@@ -3712,7 +3626,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
             })()}
             {lootSubMode === "hideout" && !hasHideout && (
               <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: 10, marginBottom: 8, textAlign: "center" }}>
-                <div style={{ fontSize: T.fs3, color: T.textDim }}>Set a hideout target in My Profile → Hideout first.</div>
+                <div style={{ fontSize: T.fs3, color: T.textDim }}>Set a hideout target in Tasks → Hideout first.</div>
               </div>
             )}
             {lootSubMode === "hideout" && hasHideout && (() => {
@@ -3742,7 +3656,7 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
                     <input value={equipSearch} onChange={e => setEquipSearch(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && searchEquipment(equipSearch)}
                       placeholder="Search items (e.g. AK-74, Slick, GPU)..."
-                      style={{ flex: 1, background: "#181818", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 8px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box" }} />
+                      style={{ flex: 1, background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 8px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box" }} />
                     <button onClick={() => searchEquipment(equipSearch)}
                       style={{ background: T.orange + "22", border: `1px solid ${T.orange}`, color: T.orange, padding: "6px 10px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, flexShrink: 0 }}>SEARCH</button>
                   </div>
@@ -3934,8 +3848,8 @@ function SquadTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, loa
   );
 }
 
-// ─── EXTRACTS TAB ─────────────────────────────────────────────────────────
-function ExtractsTab() {
+// ─── INTEL TAB ────────────────────────────────────────────────────────────
+function IntelTab() {
   const [sel, setSel] = useState(EMAPS[0]);
   const [fac, setFac] = useState("pmc");
   const [fil, setFil] = useState("all");
@@ -3956,7 +3870,7 @@ function ExtractsTab() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px 0" }}>
         <div style={{ display: "flex", gap: 5, marginBottom: 10 }}>
-          {["extracts", "keys", "roadmap"].map(v => <Btn key={v} ch={v === "keys" ? "Key Guide" : v} onClick={() => setSv(v)} active={sv === v} />)}
+          {["extracts", "keys", "maps", "progression"].map(v => <Btn key={v} ch={v === "keys" ? "Keys" : v === "progression" ? "Progression" : v === "maps" ? "Maps" : v} onClick={() => setSv(v)} active={sv === v} />)}
         </div>
         {sv === "extracts" && <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 4, paddingBottom: 10 }}>
@@ -3968,7 +3882,7 @@ function ExtractsTab() {
         </>}
       </div>
       <div style={{ overflowY: "auto", flex: 1, padding: 14 }}>
-        {sv === "roadmap" && <>
+        {sv === "progression" && <>
           <div style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, borderLeft: `2px solid ${T.success}`, padding: "10px 12px", marginBottom: 14, fontSize: T.fs2, color: "#7ab87a", lineHeight: 1.7 }}>⚔ PvE — Co-op extracts N/A. Difficulty = boss/Raider danger.</div>
           {["Beginner", "Intermediate", "Advanced", "Endgame"].map(tier => (
             <div key={tier} style={{ marginBottom: 16 }}>
@@ -4064,45 +3978,7 @@ function ExtractsTab() {
             {Object.entries(ET_CONFIG).map(([t, c]) => <div key={t} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}><div style={{ width: 6, height: 6, background: c.border, flexShrink: 0 }} /><div style={{ fontSize: T.fs2, color: c.color, width: 14 }}>{c.icon}</div><div style={{ fontSize: T.fs3, color: t === "coop" ? T.borderBright : T.textDim }}>{c.label}</div></div>)}
           </div>
         </>}
-      </div>
-    </div>
-  );
-}
-
-// ─── MAPS TAB ─────────────────────────────────────────────────────────────
-function MapsTab() {
-  const [section, setSection] = useState("maps");
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
-        <div style={{ display: "flex", gap: 5 }}>
-          <Btn ch="Maps" active={section === "maps"} onClick={() => setSection("maps")} />
-          <Btn ch="Install App" active={section === "install"} onClick={() => setSection("install")} color={T.blue} />
-        </div>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {section === "install" && (
-          <div>
-            <div style={{ background: T.surface, border: `1px solid ${T.blueBorder}`, borderLeft: `2px solid ${T.blue}`, padding: 12, marginBottom: 16 }}>
-              <div style={{ fontSize: T.fs3, color: T.blue, fontWeight: "bold", marginBottom: 8 }}>Install as a native-feeling app</div>
-              <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.8 }}>Add this app to your home screen. Runs full-screen, appears in your app launcher — no app store required.</div>
-            </div>
-            {[
-              { platform: "iPhone / iPad", color: T.purple, steps: ["Open this page in Safari (must be Safari, not Chrome)", "Tap the Share icon (box with arrow pointing up)", "Scroll down and tap Add to Home Screen", "Name it Tarkov Guide and tap Add"] },
-              { platform: "Android", color: T.success, steps: ["Open this page in Chrome", "Tap the ⋮ menu (top-right)", "Tap Add to Home screen or Install app", "Tap Add or Install to confirm"] },
-              { platform: "Windows / Mac (Chrome or Edge)", color: T.gold, steps: ["Open this page in Chrome or Edge", "Look for the install icon (⊕) in the address bar", "Or: ⋮ menu → Save and share → Install page as app", "Name it Tarkov Guide and click Install"] },
-            ].map(({ platform, color, steps }) => (
-              <div key={platform} style={{ background: T.surface, border: `1px solid ${color}33`, borderLeft: `2px solid ${color}`, padding: 12, marginBottom: 10 }}>
-                <div style={{ color, fontSize: T.fs2, fontWeight: "bold", marginBottom: 8 }}>{platform}</div>
-                {steps.map((s, i) => <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" }}><div style={{ background: color + "22", color, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: T.fs3, flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div><div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.5 }}>{s}</div></div>)}
-              </div>
-            ))}
-            <div style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, borderLeft: `2px solid ${T.success}`, padding: 10 }}>
-              <div style={{ fontSize: T.fs3, color: T.success, lineHeight: 1.8 }}>✓ No app store · ✓ Progress saved on device · ✓ Share codes work phone ↔ desktop · ✓ Live tarkov.dev data</div>
-            </div>
-          </div>
-        )}
-        {section === "maps" && <>
+        {sv === "maps" && <>
           <SL c={<>INTERACTIVE MAPS — ALL SOURCES<Tip text="Quick links to the best interactive maps for each location. Open them in a second tab while planning your raid." /></>} />
           {EMAPS.map(map => (
             <div key={map.id} style={{ background: T.surface, border: `1px solid ${map.color}22`, borderLeft: `2px solid ${map.color}`, padding: 10, marginBottom: 8 }}>
@@ -4120,15 +3996,116 @@ function MapsTab() {
   );
 }
 
+// ─── PROFILE TAB ──────────────────────────────────────────────────────────
+function ProfileTab({ myProfile, saveMyProfile, setTab }) {
+  const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [showRestore, setShowRestore] = useState(false);
+  const [restoreCode, setRestoreCode] = useState("");
+  const [restoreError, setRestoreError] = useState("");
+  const copyCode = () => {
+    const code = encodeProfile(myProfile); if (!code) return;
+    try { navigator.clipboard.writeText(code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2500); }).catch(() => { const ta = document.createElement("textarea"); ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopied(true); setTimeout(() => setCopied(false), 2500); }); } catch(e) {}
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+
+        {/* ── NAME & COLOR ── */}
+        <SL c={<>YOUR PROFILE<Tip text="Set your callsign and pick a color. This is how your squadmates will see you on the route map." /></>} />
+        <div style={{ background: T.surface, border: `1px solid ${myProfile.color}44`, borderLeft: `2px solid ${myProfile.color}`, padding: 12, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: myProfile.color + "33", border: `2px solid ${myProfile.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: T.fs4, color: myProfile.color, flexShrink: 0 }}>{myProfile.name?.[0]?.toUpperCase() || "?"}</div>
+            {editingName ? (
+              <input autoFocus value={myProfile.name || ""} onChange={e => saveMyProfile({ ...myProfile, name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={e => e.key === "Enter" && setEditingName(false)} style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${myProfile.color}`, color: myProfile.color, fontSize: T.fs4, fontFamily: T.sans, outline: "none", padding: "2px 0" }} />
+            ) : (
+              <div style={{ flex: 1, color: myProfile.color, fontSize: T.fs4, fontWeight: "bold", cursor: "pointer" }} onClick={() => setEditingName(true)}>
+                {myProfile.name || "Tap to set name"}<span style={{ fontSize: T.fs2, color: T.textDim, fontWeight: "normal", marginLeft: 6 }}>✎</span>
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {PLAYER_COLORS.map((col, i) => <button key={i} onClick={() => saveMyProfile({ ...myProfile, color: col })} style={{ width: 24, height: 24, borderRadius: "50%", background: col, cursor: "pointer", border: myProfile.color === col ? "2px solid #d8d0c0" : "2px solid transparent", padding: 0 }} />)}
+          </div>
+        </div>
+
+        {/* ── GET STARTED ── */}
+        {(!myProfile.name || !(myProfile.tasks || []).length) && (
+          <div style={{ background: T.gold + "11", border: `2px solid ${T.gold}44`, borderRadius: T.r1, padding: T.sp4, marginBottom: T.sp4 }}>
+            <div style={{ fontSize: T.fs5, color: T.gold, fontWeight: "bold", letterSpacing: 1, marginBottom: T.sp2 }}>GET STARTED</div>
+            <div style={{ fontSize: T.fs3, color: T.text, lineHeight: 1.8, marginBottom: T.sp3 }}>
+              {!myProfile.name && <div style={{ color: T.gold }}>1. Set your name above</div>}
+              {myProfile.name && <div style={{ color: T.success }}>1. Name set ✓</div>}
+              {!(myProfile.tasks || []).length ? <div style={{ color: T.gold }}>2. Go to the Tasks tab and add your active quests</div> : <div style={{ color: T.success }}>2. Tasks added ✓</div>}
+              <div style={{ color: T.textDim }}>3. Copy your share code below and head to the Raid tab</div>
+            </div>
+            {myProfile.name && !(myProfile.tasks || []).length && (
+              <button onClick={() => setTab("tasks")} style={{ width: "100%", background: T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs3, fontWeight: "bold", letterSpacing: 1, cursor: "pointer", fontFamily: T.sans, borderRadius: T.r2 }}>★ GO TO TASKS</button>
+            )}
+          </div>
+        )}
+
+        {/* ── SHARE CODE ── */}
+        <SL c={<>YOUR SHARE CODE<Tip text="Copy this code and paste it in Discord before each raid. Your squadmates paste it in the Raid tab to import your profile and tasks." /></>} />
+        <div style={{ background: T.surface, border: `1px solid ${myProfile.color}44`, borderLeft: `2px solid ${myProfile.color}`, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.7, marginBottom: 10 }}>Copy your code and paste it in Discord before each raid. Teammates import it in the Raid tab — no account needed.</div>
+          <div style={{ background: T.inputBg, border: `1px solid ${T.border}`, padding: "8px 10px", marginBottom: 8, fontSize: T.fs2, color: T.textDim, fontFamily: T.mono, wordBreak: "break-all", lineHeight: 1.5 }}>{myProfile.tasks?.length > 0 ? encodeProfile(myProfile)?.slice(0, 60) + "..." : "Add tasks to generate your code"}</div>
+          <button onClick={copyCode} disabled={!myProfile.tasks?.length} style={{ width: "100%", background: copied ? T.successBg : myProfile.color + "22", border: `2px solid ${copied ? T.successBorder : myProfile.color}`, color: copied ? T.success : myProfile.color, padding: "10px 0", fontSize: T.fs2, cursor: myProfile.tasks?.length ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", fontWeight: "bold" }}>
+            {copied ? "✓ COPIED TO CLIPBOARD" : "📋 COPY MY CODE"}
+          </button>
+          {!myProfile.tasks?.length && <div style={{ fontSize: T.fs2, color: T.textDim, textAlign: "center", marginTop: 6 }}>Add tasks in the Tasks tab first</div>}
+          <button onClick={() => setShowRestore(!showRestore)} style={{ width: "100%", background: showRestore ? T.successBg : T.blueBg, border: `2px solid ${showRestore ? T.successBorder : T.blueBorder}`, color: showRestore ? T.success : T.blue, fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, marginTop: 8, padding: "8px 0", textTransform: "uppercase" }}>{showRestore ? "▾ HIDE RESTORE" : "▸ RESTORE PROFILE FROM CODE"}</button>
+          {showRestore && (
+            <div style={{ background: T.inputBg, border: `1px solid ${T.border}`, padding: 10, marginTop: 4 }}>
+              <div style={{ fontSize: T.fs2, color: T.textDim, lineHeight: 1.5, marginBottom: 8 }}>Paste a share code to restore your profile on this device — name, color, tasks, and progress will all transfer.</div>
+              <textarea value={restoreCode} onChange={e => setRestoreCode(e.target.value)} placeholder="Paste your TG2:... code here"
+                style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 6 }} />
+              {restoreError && <div style={{ fontSize: T.fs2, color: T.error, marginBottom: 6 }}>{restoreError}</div>}
+              <button onClick={() => {
+                setRestoreError("");
+                const decoded = decodeProfile(restoreCode.trim());
+                if (!decoded) { setRestoreError("Invalid code — check for typos."); return; }
+                saveMyProfile({ ...myProfile, name: decoded.name, color: decoded.color, tasks: decoded.tasks, progress: decoded.progress });
+                setRestoreCode(""); setShowRestore(false);
+              }} disabled={!restoreCode.trim()} style={{ width: "100%", background: restoreCode.trim() ? T.successBg : "transparent", border: `2px solid ${restoreCode.trim() ? T.successBorder : T.border}`, color: restoreCode.trim() ? T.success : T.textDim, padding: "10px 0", fontSize: T.fs2, cursor: restoreCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1 }}>RESTORE MY PROFILE</button>
+            </div>
+          )}
+        </div>
+
+        {/* ── INSTALL APP ── */}
+        <SL c={<>INSTALL AS APP<Tip text="Add this to your home screen for a native app experience. Runs full-screen, appears in your app launcher — no app store required." /></>} />
+        <div style={{ background: T.surface, border: `1px solid ${T.blueBorder}`, borderLeft: `2px solid ${T.blue}`, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: T.fs3, color: T.blue, fontWeight: "bold", marginBottom: 8 }}>Install as a native-feeling app</div>
+          <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.8 }}>Add this app to your home screen. Runs full-screen, appears in your app launcher — no app store required.</div>
+        </div>
+        {[
+          { platform: "iPhone / iPad", color: T.purple, steps: ["Open this page in Safari (must be Safari, not Chrome)", "Tap the Share icon (box with arrow pointing up)", "Scroll down and tap Add to Home Screen", "Name it Tarkov Guide and tap Add"] },
+          { platform: "Android", color: T.success, steps: ["Open this page in Chrome", "Tap the ⋮ menu (top-right)", "Tap Add to Home screen or Install app", "Tap Add or Install to confirm"] },
+          { platform: "Windows / Mac (Chrome or Edge)", color: T.gold, steps: ["Open this page in Chrome or Edge", "Look for the install icon (⊕) in the address bar", "Or: ⋮ menu → Save and share → Install page as app", "Name it Tarkov Guide and click Install"] },
+        ].map(({ platform, color, steps }) => (
+          <div key={platform} style={{ background: T.surface, border: `1px solid ${color}33`, borderLeft: `2px solid ${color}`, padding: 12, marginBottom: 10 }}>
+            <div style={{ color, fontSize: T.fs2, fontWeight: "bold", marginBottom: 8 }}>{platform}</div>
+            {steps.map((s, i) => <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" }}><div style={{ background: color + "22", color, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: T.fs3, flexShrink: 0, fontFamily: T.mono }}>{i + 1}</div><div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.5 }}>{s}</div></div>)}
+          </div>
+        ))}
+        <div style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, borderLeft: `2px solid ${T.success}`, padding: 10 }}>
+          <div style={{ fontSize: T.fs3, color: T.success, lineHeight: 1.8 }}>✓ No app store · ✓ Progress saved on device · ✓ Share codes work phone ↔ desktop · ✓ Live tarkov.dev data</div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── WELCOME + NAV ────────────────────────────────────────────────────────
 function WelcomeBanner({ onDismiss }) {
   return (
-    <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(20,20,20,0.96)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: T.surface, border: `1px solid ${T.borderBright}`, borderLeft: `2px solid ${T.gold}`, padding: 20, maxWidth: 340 }}>
-        <div style={{ fontSize: T.fs3, letterSpacing: 1.5, color: T.gold, marginBottom: 8 }}>FIELD GUIDE v6</div>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(13,14,16,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: T.surface, border: `1px solid rgba(210,175,120,0.15)`, borderLeft: `2px solid ${T.gold}`, padding: 20, maxWidth: 340, boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}>
+        <div style={{ fontSize: T.fs3, letterSpacing: 1.5, color: T.gold, marginBottom: 8 }}>FIELD GUIDE v7</div>
         <div style={{ fontSize: T.fs3, color: T.textBright, fontWeight: "bold", marginBottom: 10 }}>Tarkov PvE Squad Guide</div>
         <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.8, marginBottom: 14 }}>Each player manages their own profile. Share a code before raids — no squad secretary needed.</div>
-        {["✓ Set your name + tasks in My Profile", "✓ Copy your code → paste it in Discord", "✓ Squad tab: paste teammates' codes, select map", "✓ Pick your intended extract — item checks included", "✓ Generate route: objectives optimized, extract last", "✓ Post-raid updates only your own progress", "✓ Install as home screen app — see Maps tab"].map((t, i) => <div key={i} style={{ fontSize: T.fs2, color: T.success, marginBottom: 4 }}>{t}</div>)}
+        {["✓ Set your name in Profile, add tasks in Tasks", "✓ Copy your code → paste it in Discord", "✓ Raid tab: paste teammates' codes, select map", "✓ Pick your intended extract — item checks included", "✓ Generate route: objectives optimized, extract last", "✓ Post-raid updates only your own progress", "✓ Install as home screen app — see Profile tab"].map((t, i) => <div key={i} style={{ fontSize: T.fs2, color: T.success, marginBottom: 4 }}>{t}</div>)}
         <button onClick={onDismiss} style={{ width: "100%", background: T.gold, color: T.bg, border: "none", padding: "14px 0", fontSize: T.fs4, letterSpacing: 1.5, cursor: "pointer", fontFamily: T.sans, textTransform: "uppercase", fontWeight: "bold", marginTop: 14, borderRadius: T.r2 }}>ENTER FIELD GUIDE</button>
       </div>
     </div>
@@ -4136,17 +4113,17 @@ function WelcomeBanner({ onDismiss }) {
 }
 
 function BottomNav({ tab, setTab }) {
-  const items = [{ id: "profile", label: "My Profile", icon: "▲" }, { id: "squad", label: "Squad", icon: "◈" }, { id: "extracts", label: "Map Info", icon: "⬆" }, { id: "maps", label: "Maps", icon: "🗺" }];
+  const items = [{ id: "tasks", label: "Tasks", icon: "★" }, { id: "raid", label: "Raid", icon: "▶" }, { id: "intel", label: "Intel", icon: "◎" }, { id: "profile", label: "Profile", icon: "▲" }];
   return (
-    <div style={{ display: "flex", borderTop: `2px solid ${T.borderBright}`, background: T.surface, flexShrink: 0 }}>
-      {items.map(item => <button key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 4px 10px", background: tab === item.id ? T.gold + "12" : "transparent", border: "none", cursor: "pointer", borderTop: `2px solid ${tab === item.id ? T.gold : "transparent"}`, transition: "background 0.15s" }}><span style={{ fontSize: T.fs4, marginBottom: 3 }}>{item.icon}</span><span style={{ fontSize: T.fs2, letterSpacing: 0.5, fontWeight: tab === item.id ? "bold" : "normal", fontFamily: T.sans, textTransform: "uppercase", color: tab === item.id ? T.gold : T.textDim }}>{item.label}</span></button>)}
+    <div style={{ display: "flex", borderTop: `1px solid rgba(210,175,120,0.15)`, background: T.surface, flexShrink: 0 }}>
+      {items.map(item => <button key={item.id} onClick={() => setTab(item.id)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "12px 4px 10px", background: tab === item.id ? "rgba(210,175,120,0.08)" : "transparent", border: "none", cursor: "pointer", borderTop: `2px solid ${tab === item.id ? T.gold : "transparent"}`, transition: "all 0.15s ease" }}><span style={{ fontSize: T.fs4, marginBottom: 3, opacity: tab === item.id ? 1 : 0.5 }}>{item.icon}</span><span style={{ fontSize: T.fs2, letterSpacing: 0.8, fontWeight: tab === item.id ? "bold" : "normal", fontFamily: T.sans, textTransform: "uppercase", color: tab === item.id ? T.gold : T.textDim }}>{item.label}</span></button>)}
     </div>
   );
 }
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────
 export default function TarkovGuide() {
-  const [tab, setTab] = useState("profile");
+  const [tab, setTab] = useState("tasks");
   const [myProfile, saveMyProfile, profileReady] = useStorage("tg-myprofile-v3", { id: "me_" + Math.random().toString(36).slice(2, 10), name: "", color: PLAYER_COLORS[0], tasks: [], progress: {} });
   const [apiMaps, setApiMaps] = useState(null);
   const [apiTasks, setApiTasks] = useState(null);
@@ -4174,15 +4151,15 @@ export default function TarkovGuide() {
   }, []);
 
   const [pendingRouteTask, setPendingRouteTask] = useState(null);
-  const [welcomed, saveWelcomed] = useStorage("tg-welcomed-v6", false);
+  const [welcomed, saveWelcomed] = useStorage("tg-welcomed-v7", false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   useEffect(() => { if (profileReady && !welcomed) setShowWelcome(true); }, [profileReady, welcomed]);
 
   return (
-    <div style={{ height: "100vh", width: "100%", display: "flex", justifyContent: "center", background: "#000" }}>
-    <div style={{ height: "100%", width: "100%", maxWidth: 960, background: T.bg, color: T.text, fontFamily: T.sans, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
+    <div style={{ height: "100vh", width: "100%", display: "flex", justifyContent: "center", background: T.bg }}>
+    <div style={{ height: "100%", width: "100%", maxWidth: 960, background: T.bg, backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E\")", color: T.text, fontFamily: T.sans, display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" }}>
       {showWelcome && <WelcomeBanner onDismiss={() => { setShowWelcome(false); saveWelcomed(true); }} />}
       {searchOpen && (() => {
         const q = searchQ.toLowerCase().trim();
@@ -4190,16 +4167,16 @@ export default function TarkovGuide() {
         if (q.length >= 2) {
           // Search tasks
           (apiTasks || []).filter(t => t.name.toLowerCase().includes(q)).slice(0, 8).forEach(t => {
-            results.push({ type: "Task", name: t.name, detail: `${t.trader?.name || ""}${t.map ? " · " + t.map.name : ""}`, action: () => { setTab("profile"); setSearchOpen(false); } });
+            results.push({ type: "Task", name: t.name, detail: `${t.trader?.name || ""}${t.map ? " · " + t.map.name : ""}`, action: () => { setTab("tasks"); setSearchOpen(false); } });
           });
           // Search maps
           EMAPS.filter(m => m.name.toLowerCase().includes(q)).forEach(m => {
-            results.push({ type: "Map", name: m.name, detail: m.tier, action: () => { setTab("extracts"); setSearchOpen(false); } });
+            results.push({ type: "Map", name: m.name, detail: m.tier, action: () => { setTab("intel"); setSearchOpen(false); } });
           });
           // Search extracts
           EMAPS.forEach(m => {
             [...(m.pmcExtracts || []), ...(m.scavExtracts || [])].filter(e => e.name.toLowerCase().includes(q)).slice(0, 4).forEach(e => {
-              results.push({ type: "Extract", name: e.name, detail: `${m.name} · ${e.type}`, action: () => { setTab("extracts"); setSearchOpen(false); } });
+              results.push({ type: "Extract", name: e.name, detail: `${m.name} · ${e.type}`, action: () => { setTab("intel"); setSearchOpen(false); } });
             });
           });
           // Search bosses
@@ -4210,7 +4187,7 @@ export default function TarkovGuide() {
           });
         }
         return (
-          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.9)", zIndex: 100, display: "flex", flexDirection: "column", padding: 14 }}>
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(13,14,16,0.92)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 100, display: "flex", flexDirection: "column", padding: 14 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)} autoFocus placeholder="Search tasks, maps, extracts, bosses..."
                 style={{ flex: 1, background: T.surface, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "10px 12px", fontSize: T.fs3, fontFamily: T.sans, outline: "none" }} />
@@ -4232,12 +4209,12 @@ export default function TarkovGuide() {
           </div>
         );
       })()}
-      <div style={{ background: T.surface, borderBottom: `1px solid ${T.borderBright}`, padding: "10px 14px 8px", flexShrink: 0 }}>
-        <div style={{ fontSize: T.fs2, letterSpacing: 1.5, color: T.textDim, marginBottom: 2 }}>PvE FIELD REFERENCE</div>
+      <div style={{ background: T.surface, borderBottom: `1px solid rgba(210,175,120,0.12)`, padding: "10px 14px 8px", flexShrink: 0 }}>
+        <div style={{ fontSize: T.fs1, letterSpacing: 3, color: T.textDim, marginBottom: 2 }}>PvE FIELD REFERENCE</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: T.fs6, fontWeight: "bold", color: T.gold, letterSpacing: 1.5 }}>TARKOV GUIDE</div>
+          <div style={{ fontSize: T.fs6, fontWeight: "bold", color: T.gold, letterSpacing: 2.5 }}>TARKOV GUIDE</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={() => { setSearchOpen(true); setSearchQ(""); }} style={{ background: "transparent", border: `1px solid ${T.border}`, color: T.textDim, padding: "3px 8px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans }}>🔍</button>
+            <button onClick={() => { setSearchOpen(true); setSearchQ(""); }} style={{ background: "rgba(210,175,120,0.06)", border: `1px solid rgba(210,175,120,0.15)`, color: T.text, padding: "3px 8px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, borderRadius: T.r1 }}>🔍</button>
             {myProfile.name && <div style={{ fontSize: T.fs3, color: myProfile.color, fontFamily: T.sans }}>{myProfile.name}</div>}
             <div style={{ fontSize: T.fs1, color: apiError ? T.errorBorder : T.successBorder, display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: apiError ? T.error : T.success }} />
@@ -4247,10 +4224,10 @@ export default function TarkovGuide() {
         </div>
       </div>
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        {tab === "profile" && <MyProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} onRouteTask={(taskId, mapId) => { setPendingRouteTask({ taskId, mapId }); setTab("squad"); }} />}
-        {tab === "squad" && <SquadTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} pendingRouteTask={pendingRouteTask} clearPendingRouteTask={() => setPendingRouteTask(null)} />}
-        {tab === "extracts" && <ExtractsTab />}
-        {tab === "maps" && <MapsTab />}
+        {tab === "tasks" && <TasksTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} apiHideout={apiHideout} hideoutLevels={hideoutLevels} saveHideoutLevels={saveHideoutLevels} hideoutTarget={hideoutTarget} saveHideoutTarget={saveHideoutTarget} onRouteTask={(taskId, mapId) => { setPendingRouteTask({ taskId, mapId }); setTab("raid"); }} />}
+        {tab === "raid" && <RaidTab myProfile={myProfile} saveMyProfile={saveMyProfile} apiMaps={apiMaps} apiTasks={apiTasks} apiTraders={apiTraders} loading={apiLoading} apiError={apiError} hideoutTarget={hideoutTarget} apiHideout={apiHideout} hideoutLevels={hideoutLevels} pendingRouteTask={pendingRouteTask} clearPendingRouteTask={() => setPendingRouteTask(null)} />}
+        {tab === "intel" && <IntelTab />}
+        {tab === "profile" && <ProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} setTab={setTab} />}
       </div>
       <BottomNav tab={tab} setTab={setTab} />
     </div>

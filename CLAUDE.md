@@ -4,7 +4,7 @@
 
 A mobile-first progressive web app (PWA) built as a React single-file component. This is a tactical reference tool for Escape from Tarkov PvE players. It is currently built and iterated entirely as a Claude.ai artifact (React JSX), and this handoff is to continue development in Claude Code.
 
-**Current version: v6**
+**Current version: v7**
 **Source file:** `TarkovGuide.jsx` (single file, all components inline)
 
 ---
@@ -13,21 +13,19 @@ A mobile-first progressive web app (PWA) built as a React single-file component.
 
 A "one stop shop" field reference for Tarkov PvE that a player should be able to pull up in the time it takes for a map to load in-game. Key features:
 
-1. **My Profile tab** — Each player sets their own name, color, and task list independently. No squad secretary. Tasks are sourced live from the tarkov.dev GraphQL API.
+1. **Tasks tab** — Browse, add, and manage your active quests. Sub-tabs: My Tasks, Browse, Trees (prerequisite chains), and Hideout tracking. Tasks are sourced live from the tarkov.dev GraphQL API.
 
-2. **Squad tab** — Before a raid, each player copies their share code (`TG2:...` base64 string) and pastes it in Discord. Teammates import it. The app combines all imported profiles to generate a single optimized squad route.
+2. **Raid tab** — Plan and execute raids (solo or squad). Import teammate codes, select map, pick tasks and extracts, generate optimized route, and track post-raid progress.
 
-3. **Extract Selection** — After selecting a map and active players, each player picks their intended extract. Special extracts (keys, Paracord+Red Rebel, armored train, roubles) trigger an item-check prompt asking if the player has the required items. The chosen extract becomes the **forced final waypoint** in the route.
+3. **Intel tab** — All reference material in one place. Sub-tabs: Extracts (per map, PMC/Scav), Keys (key guide by map), Maps (external links to tarkov.dev/Mapgenie/wiki), and Progression (tier-based map roadmap).
 
-4. **Route Generation** — Nearest-neighbor optimization from spawn point through all players' priority task objectives, then appends extract as last stop. Rendered on the real tarkov.dev SVG map image with numbered gold waypoints and a green ⬆ extract marker.
+4. **Profile tab** — Lightweight identity and settings. Name/color editor, share code copy/restore, and PWA install instructions.
 
-5. **Extracts tab** — Quick reference for all PMC/Scav extracts per map, filtered by type (open/key/pay/coop/special/timed). Co-op extracts are grayed/struck-through since this is PvE only.
+5. **Route Generation** — Nearest-neighbor optimization from spawn point through all players' priority task objectives, then appends extract as last stop. Rendered on the real tarkov.dev SVG map image with numbered gold waypoints and a green ⬆ extract marker.
 
-6. **Maps tab** — Quick-launch links to tarkov.dev, Mapgenie, and the Tarkov wiki for every map. Also contains PWA install instructions for iPhone/Android/Desktop.
+6. **Post-Raid Tracker** — After a raid, each player logs their own progress (kills completed, items found). Updates their profile's progress object, which is included in their next share code.
 
-7. **Post-Raid Tracker** — After a raid, each player logs their own progress (kills completed, items found). Updates their profile's progress object, which is included in their next share code.
-
-8. **Persistent Storage** — Uses `window.storage` (Claude artifact built-in key-value store). On export to a real PWA/website, swap for `localStorage` or a backend.
+7. **Persistent Storage** — Uses `window.storage` (Claude artifact built-in key-value store). On export to a real PWA/website, swap for `localStorage` or a backend.
 
 ---
 
@@ -64,10 +62,10 @@ The `EMAPS` array in the source contains hardcoded extract data for all 9 maps b
 
 | Feature | Status | Notes |
 |---|---|---|
-| My Profile (name, color, tasks) | ✅ Complete | |
-| Task browser (live from tarkov.dev) | ✅ Complete | Filters by trader and map |
-| Share codes | ✅ Complete | TG2: format |
-| Squad import | ✅ Complete | |
+| Profile (name, color) | ✅ Complete | Profile tab |
+| Task browser (live from tarkov.dev) | ✅ Complete | Tasks tab → Browse sub-tab |
+| Share codes | ✅ Complete | TG2: format, in Profile tab |
+| Squad import | ✅ Complete | Raid tab |
 | Map selection (tarkov.dev API) | ✅ Complete | 9 maps |
 | Faction toggle (PMC/Scav) | ✅ Complete | |
 | Priority task selection per player | ✅ Complete | |
@@ -77,9 +75,9 @@ The `EMAPS` array in the source contains hardcoded extract data for all 9 maps b
 | Conflict resolution (overlapping kill objectives) | ✅ Complete | Merge or separate |
 | Post-raid progress tracker | ✅ Complete | |
 | Persistent storage | ✅ Complete | window.storage (swap to localStorage for PWA) |
-| PWA install instructions | ✅ Complete | iPhone/Android/Desktop |
-| Roadmap progression guide | ✅ Complete | Extracts tab → roadmap sub-view |
-| Extracts reference | ✅ Complete | All maps, PMC + Scav |
+| PWA install instructions | ✅ Complete | Profile tab |
+| Progression guide | ✅ Complete | Intel tab → Progression sub-view |
+| Extracts reference | ✅ Complete | Intel tab, all maps, PMC + Scav |
 
 ---
 
