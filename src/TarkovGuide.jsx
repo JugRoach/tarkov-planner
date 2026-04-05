@@ -597,6 +597,31 @@ function cleanOrphanedPrereqProgress(profileId, taskList, apiTasks, progress) {
   return p;
 }
 
+// ─── QUEST TREE DEPTH (topological progression order) ────────────────────
+function computeTaskDepths(apiTasks) {
+  if (!apiTasks?.length) return {};
+  const depths = {};
+  const computing = new Set();
+  const getDepth = (taskId) => {
+    if (depths[taskId] !== undefined) return depths[taskId];
+    if (computing.has(taskId)) return 0;
+    computing.add(taskId);
+    const task = apiTasks.find(t => t.id === taskId);
+    if (!task?.taskRequirements?.length) { depths[taskId] = 0; computing.delete(taskId); return 0; }
+    let maxParentDepth = -1;
+    for (const req of task.taskRequirements) {
+      if (req.status?.includes("complete") && req.task?.id) {
+        maxParentDepth = Math.max(maxParentDepth, getDepth(req.task.id));
+      }
+    }
+    depths[taskId] = maxParentDepth < 0 ? 0 : maxParentDepth + 1;
+    computing.delete(taskId);
+    return depths[taskId];
+  };
+  apiTasks.forEach(t => getDepth(t.id));
+  return depths;
+}
+
 // ─── MAP RECOMMENDATION ──────────────────────────────────────────────────
 function computeMapRecommendation(profiles, apiTasks) {
   if (!profiles?.length || !apiTasks?.length) return [];
@@ -1739,6 +1764,14 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
   const traders = [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort);
   const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
   const taskMaps = [...new Set((apiTasks || []).map(t => t.map?.name).filter(Boolean))].sort();
+  const taskDepths = computeTaskDepths(apiTasks);
+  const progressionSort = (a, b) => {
+    const da = taskDepths[a.id] ?? 999, db = taskDepths[b.id] ?? 999;
+    if (da !== db) return da - db;
+    const la = a.minPlayerLevel || 0, lb = b.minPlayerLevel || 0;
+    if (la !== lb) return la - lb;
+    return a.name.localeCompare(b.name);
+  };
   const filteredTasks = (apiTasks || []).filter(t => {
     if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
@@ -1778,7 +1811,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
     if (taskSearch && !t.name.toLowerCase().includes(taskSearch.toLowerCase())) return false;
     return true;
-  }).sort((a, b) => a.name.localeCompare(b.name)).slice(0, browseLimit);
+  }).sort(progressionSort).slice(0, browseLimit);
   const addAllForTrader = (traderName) => {
     const trTasks = (apiTasks || []).filter(t => t.trader?.name === traderName);
     let allTasks = [...(myProfile.tasks || [])];
@@ -1890,15 +1923,29 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
               return browseTasks.map(task => {
                 const added = myProfile.tasks?.some(t => t.taskId === task.id);
                 const prereqDone = !added && myPrereqIds.has(task.id);
+                const prog = myProfile.progress || {};
+                const reqObjs = (task.objectives || []).filter(o => !o.optional);
+                const browseComplete = added && reqObjs.length > 0 && reqObjs.every(obj => { const k = `${myProfile.id}-${task.id}-${obj.id}`; const meta = getObjMeta(obj); return (prog[k] || 0) >= meta.total; });
+                const cardBg = browseComplete ? T.successBg : prereqDone ? T.successBg : T.surface;
+                const cardBorder = browseComplete ? T.successBorder : added ? myProfile.color : prereqDone ? T.successBorder : T.border;
+                const cardLeft = browseComplete ? T.success : added ? myProfile.color : prereqDone ? T.success : T.border;
                 return (
-                  <div key={task.id} style={{ background: prereqDone ? T.successBg : T.surface, border: `1px solid ${added ? myProfile.color : prereqDone ? T.successBorder : T.border}`, borderLeft: `2px solid ${added ? myProfile.color : prereqDone ? T.success : T.border}`, padding: 10, marginBottom: 6 }}>
+                  <div key={task.id} style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderLeft: `2px solid ${cardLeft}`, padding: 10, marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                      <div style={{ color: prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
-                      {prereqDone ? (
-                        <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1, flexShrink: 0 }}>PREREQ ✓</span>
-                      ) : (
-                        <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, flexShrink: 0 }}>{added ? "✕ REMOVE" : "+ ADD"}</button>
-                      )}
+                      <div style={{ color: browseComplete || prereqDone ? T.success : T.textBright, fontSize: T.fs2, fontWeight: "bold", flex: 1, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", textDecoration: browseComplete || prereqDone ? "line-through" : "none" }}>{task.name}{task.wikiLink && <a href={task.wikiLink} target="_blank" rel="noreferrer" style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "2px 6px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, whiteSpace: "nowrap", textDecoration: "none", fontWeight: "normal" }}>WIKI ↗</a>}</div>
+                      <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                        {prereqDone ? (
+                          <span style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, letterSpacing: 1 }}>PREREQ ✓</span>
+                        ) : (<>
+                          {added && !browseComplete && (
+                            <button onClick={() => saveMyProfile({ ...myProfile, progress: markTaskCompleteInProgress(myProfile.id, task.id, task, myProfile.progress || {}) })} style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>✓ DONE</button>
+                          )}
+                          {added && browseComplete && (
+                            <button onClick={() => { const p = { ...(myProfile.progress || {}) }; (task.objectives || []).forEach(obj => { delete p[`${myProfile.id}-${task.id}-${obj.id}`]; }); saveMyProfile({ ...myProfile, progress: p }); }} style={{ background: T.errorBg, border: `1px solid ${T.errorBorder}`, color: T.error, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>↩ UNDO</button>
+                          )}
+                          <button onClick={() => added ? removeTask(task.id) : addTask(task.id)} style={{ background: added ? T.errorBg : "transparent", border: `1px solid ${added ? T.errorBorder : T.borderBright}`, color: added ? T.error : T.textDim, padding: "4px 8px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans }}>{added ? "✕" : "+ ADD"}</button>
+                        </>)}
+                      </div>
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 4 }}>
                       {taskTrader === "all" && <Badge label={task.trader?.name || "?"} color={T.textDim} />}
@@ -1939,7 +1986,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
             if (ac !== bc) return ac ? 1 : -1;
             const aAny = !a.apiTask.map, bAny = !b.apiTask.map;
             if (!ac && !bc && aAny !== bAny) return aAny ? 1 : -1;
-            return a.apiTask.name.localeCompare(b.apiTask.name);
+            return progressionSort(a.apiTask, b.apiTask);
           });
           const renderCard = ({ taskId, apiTask }) => {
             const prog = myProfile.progress || {};
@@ -2012,6 +2059,24 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
                   ))}
                 </div>
               )}
+              {myProfile.tasks?.length > 0 && taskGroupBy === "trader" && (
+                <div style={{ display: "flex", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
+                  {groups.filter(g => g.label).map(g => {
+                    const completedAll = g.tasks.every(item => isTaskComplete(item));
+                    const clr = completedAll && g.tasks.length > 0 ? T.success : myProfile.color;
+                    return (
+                      <button key={g.key} onClick={() => { const el = document.getElementById("mytasks-group-" + g.key.replace(/\s+/g, "-")); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }} style={{
+                        display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", fontSize: T.fs1, fontFamily: T.sans,
+                        background: clr + "18", border: `1px solid ${clr}55`, color: clr, cursor: "pointer",
+                      }}>
+                        {traderImgMap[g.label] && <img src={traderImgMap[g.label]} alt={g.label} style={{ width: 18, height: 18, borderRadius: "50%", objectFit: "cover" }} />}
+                        <span>{g.label}</span>
+                      </button>
+                    );
+                  })}
+                  <Tip text="Tap a trader to jump to their section below." />
+                </div>
+              )}
               {myProfile.tasks?.length > 0 && (
                 <button onClick={() => { if (window.confirm("Clear all " + myProfile.tasks.length + " tasks?")) saveMyProfile({ ...myProfile, tasks: [], progress: {} }); }} style={{ width: "100%", background: T.errorBg, border: `2px solid ${T.errorBorder}`, color: T.error, padding: "8px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>✕ CLEAR ALL TASKS</button>
               )}
@@ -2029,7 +2094,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
                   return done >= objs.length && objs.length > 0;
                 }).length;
                 return (
-                  <div key={g.key} style={{ marginBottom: g.label ? 12 : 0 }}>
+                  <div key={g.key} id={g.label ? "mytasks-group-" + g.key.replace(/\s+/g, "-") : undefined} style={{ marginBottom: g.label ? 12 : 0 }}>
                     {g.label && (
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: myProfile.color + "11", borderLeft: `2px solid ${myProfile.color}`, marginBottom: 6 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -2272,9 +2337,9 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
               }
             });
           });
-          // Sort children alphabetically
-          Object.values(childrenMap).forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name)));
-          const roots = filteredTasks.filter(t => !hasParent.has(t.id)).sort((a, b) => a.name.localeCompare(b.name));
+          // Sort children by progression
+          Object.values(childrenMap).forEach(arr => arr.sort(progressionSort));
+          const roots = filteredTasks.filter(t => !hasParent.has(t.id)).sort(progressionSort);
           const toggleNode = (id) => setExpandedChainNodes(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
           const expandAll = () => { const all = new Set(); filteredTasks.forEach(t => { if (childrenMap[t.id]?.length) all.add(t.id); }); setExpandedChainNodes(all); };
           const collapseAll = () => setExpandedChainNodes(new Set());
