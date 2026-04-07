@@ -28,7 +28,7 @@ export default class ErrorBoundary extends Component {
   static getDerivedStateFromError(error) { return { hasError: true, error }; }
   render() {
     if (this.state.hasError) return (
-      <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0d0e10", color: "#c7c5b3", fontFamily: "'Courier New', monospace", padding: 20, textAlign: "center" }}>
+      <div role="alert" style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0d0e10", color: "#c7c5b3", fontFamily: "'Courier New', monospace", padding: 20, textAlign: "center" }}>
         <div style={{ fontSize: 24, color: "#d2af78", marginBottom: 12 }}>Something went wrong</div>
         <div style={{ fontSize: 14, color: "#8a8070", marginBottom: 20, maxWidth: 400 }}>{String(this.state.error?.message || "Unknown error")}</div>
         <button onClick={() => window.location.reload()} style={{ background: "#d2af78", color: "#0d0e10", border: "none", padding: "12px 24px", fontSize: 16, cursor: "pointer", fontFamily: "'Courier New', monospace", fontWeight: "bold" }}>RELOAD APP</button>

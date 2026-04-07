@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { T } from '../theme.js';
 import { SL, Badge, Btn, Tip } from '../components/ui/index.js';
 import { getObjMeta, worldToPct, nearestNeighbor } from '../lib/utils.js';
@@ -152,10 +152,10 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
     return lootPoints;
   };
 
-  const selectedMap = apiMaps?.find(m => m.id === selectedMapId);
-  const selectedMapNorm = apiMaps?.find(m => m.id === selectedMapId)?.normalizedName;
-  const emap = mergeExtractPositions(EMAPS.find(m => m.id === selectedMapNorm), selectedMap);
-  const allProfiles = [myProfile, ...room.roomSquad, ...importedSquad.filter(ip => !room.roomSquad.some(rp => rp.name === ip.name))];
+  const selectedMap = useMemo(() => apiMaps?.find(m => m.id === selectedMapId), [apiMaps, selectedMapId]);
+  const selectedMapNorm = useMemo(() => apiMaps?.find(m => m.id === selectedMapId)?.normalizedName, [apiMaps, selectedMapId]);
+  const emap = useMemo(() => mergeExtractPositions(EMAPS.find(m => m.id === selectedMapNorm), selectedMap), [selectedMapNorm, selectedMap]);
+  const allProfiles = useMemo(() => [myProfile, ...room.roomSquad, ...importedSquad.filter(ip => !room.roomSquad.some(rp => rp.name === ip.name))], [myProfile, room.roomSquad, importedSquad]);
 
   // When map changes, reset extract choices
   useEffect(() => { setExtractChoices({}); }, [selectedMapId, faction]);
@@ -304,7 +304,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
 
   const handleSaveMyProgress = newProgress => saveMyProfile({ ...myProfile, progress: newProgress });
 
-  const canGenerate = selectedMap && activeIds.size > 0 && (routeMode === "loot" || [...activeIds].some(id => (priorityTasks[id] || []).length > 0));
+  const canGenerate = useMemo(() => selectedMap && activeIds.size > 0 && (routeMode === "loot" || [...activeIds].some(id => (priorityTasks[id] || []).length > 0)), [selectedMap, activeIds, routeMode, priorityTasks]);
 
   // Deferred route generation for Quick Start GO button
   useEffect(() => {
@@ -331,7 +331,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 5%" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div aria-live="polite" style={{ maxWidth: 900, margin: "0 auto" }}>
           <MapOverlay apiMap={selectedMap} emap={emap} route={route} conflicts={conflicts} onConflictResolve={handleConflictResolve} />
 
           {/* Keys for this raid */}
@@ -480,27 +480,27 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
   );
 
   // ─── Quick Start recommendation ───
-  const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
-  const traders = [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort);
-  const filteredApiTasks = targetTrader ? apiTasks?.filter(t => t.trader?.name === targetTrader) : apiTasks;
-  const quickRec = computeMapRecommendation(allProfiles, filteredApiTasks);
+  const traderImgMap = useMemo(() => Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink])), [apiTraders]);
+  const traders = useMemo(() => [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort), [apiTasks]);
+  const filteredApiTasks = useMemo(() => targetTrader ? apiTasks?.filter(t => t.trader?.name === targetTrader) : apiTasks, [apiTasks, targetTrader]);
+  const quickRec = useMemo(() => computeMapRecommendation(allProfiles, filteredApiTasks), [allProfiles, filteredApiTasks]);
   const quickTopMap = quickRec[0] || null;
   const quickTopApiMap = quickTopMap ? apiMaps?.find(m => m.id === quickTopMap.mapId) : null;
   // All incomplete tasks for the recommended map (unlimited) — used for the picker
-  const quickAllTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, 99) : {};
+  const quickAllTasks = useMemo(() => quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, 99) : {}, [quickTopMap, allProfiles, filteredApiTasks]);
   // Auto-selected tasks (first N) — used as default before user touches the picker
-  const quickAutoTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson) : {};
+  const quickAutoTasks = useMemo(() => quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson) : {}, [quickTopMap, allProfiles, filteredApiTasks, tasksPerPerson]);
   // Effective selection: manual overrides if set, otherwise auto
   const quickTasks = quickOverrides || quickAutoTasks;
   const quickTaskCount = Object.values(quickTasks).flat().length;
   // Flat list of all available tasks with details for the picker UI
-  const quickAllTaskDetails = Object.entries(quickAllTasks).flatMap(([pid, tids]) => tids.map(tid => {
+  const quickAllTaskDetails = useMemo(() => Object.entries(quickAllTasks).flatMap(([pid, tids]) => tids.map(tid => {
     const at = apiTasks?.find(t => t.id === tid);
     if (!at) return null;
     const profile = allProfiles.find(p => p.id === pid);
     const objs = (at.objectives || []).filter(o => !o.optional);
     return { taskId: tid, profileId: pid, name: at.name, trader: at.trader?.name || "", wikiLink: at.wikiLink, objectives: objs, profile };
-  })).filter(Boolean);
+  })).filter(Boolean), [quickAllTasks, apiTasks, allProfiles]);
   const quickSelectedIds = new Set(Object.values(quickTasks).flat());
 
   // Manual map pick — computed tasks
@@ -991,7 +991,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
         {apiMaps && (
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: T.fs2, color: T.orange, letterSpacing: 1, marginBottom: 8 }}>⚡ FIND ANY ITEM<Tip text="Search for any item by name. Click a result to see all maps ranked by loot potential — pick your map, and we'll generate a loot run." /></div>
-            <input value={qiSearch} onChange={e => {
+            <input aria-label="Search items" value={qiSearch} onChange={e => {
               const val = e.target.value;
               setQiSearch(val);
               clearTimeout(qiDebounce.current);
@@ -1145,15 +1145,22 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
                 </div>
               </div>
               {/* Leader controls */}
-              <div style={{ background: room.hasLeader ? T.successBg : T.inputBg, border: `1px solid ${room.hasLeader ? T.successBorder : T.border}`, padding: 8, marginBottom: 8 }}>
+              {room.reconnecting && (
+                <div style={{ background: T.orangeBg, border: `1px solid ${T.orangeBorder}`, padding: "6px 10px", marginBottom: 8, fontSize: T.fs2, color: T.orange, letterSpacing: 1 }}>
+                  RECONNECTING...
+                </div>
+              )}
+              <div style={{ background: room.hasLeader ? (room.leaderStale ? T.errorBg : T.successBg) : T.inputBg, border: `1px solid ${room.hasLeader ? (room.leaderStale ? T.errorBorder : T.successBorder) : T.border}`, padding: 8, marginBottom: 8 }}>
                 {room.hasLeader ? (
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <div>
                       <div style={{ fontSize: T.fs2, letterSpacing: 1, color: T.orange, marginBottom: 2 }}>★ SQUAD LEADER</div>
-                      <div style={{ fontSize: T.fs2, color: T.textBright, fontWeight: "bold" }}>
+                      <div style={{ fontSize: T.fs2, color: T.textBright, fontWeight: "bold", display: "flex", alignItems: "center", gap: 6 }}>
                         {room.isLeader ? "You are leading" : (() => { const leader = room.roomSquad.find(m => m.deviceId === room.leaderId); return leader ? leader.name : "..."; })()}
+                        {!room.isLeader && <span style={{ fontSize: T.fs1, color: room.leaderStale ? T.error : T.success, fontWeight: "normal" }}>{room.leaderStale ? "Away" : "Active"}</span>}
                       </div>
-                      {!room.isLeader && <div style={{ fontSize: T.fs2, color: T.textDim, marginTop: 2 }}>Leader picks map, tasks & extracts. Route syncs to you.</div>}
+                      {!room.isLeader && room.leaderStale && <div style={{ fontSize: T.fs2, color: T.error, marginTop: 2 }}>Leader disconnected — route may be stale.</div>}
+                      {!room.isLeader && !room.leaderStale && <div style={{ fontSize: T.fs2, color: T.textDim, marginTop: 2 }}>Leader picks map, tasks & extracts. Route syncs to you.</div>}
                     </div>
                     {room.isLeader && <button onClick={room.releaseLeader} style={{ background: "transparent", border: `1px solid ${T.orangeBorder}`, color: T.orange, padding: "6px 12px", fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>STEP DOWN</button>}
                   </div>
@@ -1184,7 +1191,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
                 <button onClick={room.createRoom} disabled={room.status === "creating"} style={{ flex: 1, background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>{room.status === "creating" ? "CREATING..." : "◈ CREATE ROOM"}</button>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
-                <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="ALPHA-123"
+                <input aria-label="Room join code" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="ALPHA-123"
                   style={{ flex: 1, background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", letterSpacing: 1, textTransform: "uppercase" }} />
                 <button onClick={() => room.joinRoom(joinCode)} disabled={!joinCode.trim() || room.status === "joining"} style={{ background: joinCode.trim() ? T.blueBg : "transparent", border: `1px solid ${joinCode.trim() ? T.blueBorder : T.border}`, color: joinCode.trim() ? T.blue : T.textDim, padding: "8px 14px", fontSize: T.fs3, cursor: joinCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1 }}>{room.status === "joining" ? "..." : "JOIN"}</button>
               </div>
@@ -1197,7 +1204,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
         <SL c={<>IMPORT SQUADMATE CODE<Tip step="FALLBACK" text="If a squadmate can't join the room, they can still share their code the old way — copy from the Profile tab, paste here." /></>} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, padding: 10, marginBottom: 14 }}>
           <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.6, marginBottom: 8 }}>Ask each squadmate to copy their code from the Profile tab and paste it in Discord.</div>
-          <textarea value={importCode} onChange={e => setImportCode(e.target.value)} placeholder="Paste squadmate's TG2:... code here"
+          <textarea aria-label="Import squadmate code" value={importCode} onChange={e => setImportCode(e.target.value)} placeholder="Paste squadmate's TG2:... code here"
             style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "8px 10px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box", resize: "none", height: 52, lineHeight: 1.4, marginBottom: 8 }} />
           {importError && <div style={{ fontSize: T.fs3, color: T.error, marginBottom: 6 }}>{importError}</div>}
           <button onClick={handleImport} disabled={!importCode.trim()} style={{ width: "100%", background: importCode.trim() ? T.blueBg : "transparent", border: `1px solid ${importCode.trim() ? T.blueBorder : T.border}`, color: importCode.trim() ? T.blue : T.textDim, padding: "10px 0", fontSize: T.fs2, cursor: importCode.trim() ? "pointer" : "default", fontFamily: T.sans, letterSpacing: 1, textTransform: "uppercase" }}>↓ IMPORT SQUADMATE</button>
@@ -1311,7 +1318,7 @@ export default function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, a
                 <div style={{ background: T.orangeBg, border: `1px solid ${T.orangeBorder}`, borderLeft: `2px solid ${T.orange}`, padding: "8px 10px", marginBottom: 8 }}>
                   <div style={{ fontSize: T.fs2, letterSpacing: 1, color: T.orange, marginBottom: 4 }}>TARGET EQUIPMENT<Tip text="Search for any item — weapons, armor, barter goods, keys, etc. The route will only visit locations likely to contain your targeted items." /></div>
                   <div style={{ display: "flex", gap: 6 }}>
-                    <input value={equipSearch} onChange={e => setEquipSearch(e.target.value)}
+                    <input aria-label="Search equipment" value={equipSearch} onChange={e => setEquipSearch(e.target.value)}
                       onKeyDown={e => e.key === "Enter" && searchEquipment(equipSearch)}
                       placeholder="Search items (e.g. AK-74, Slick, GPU)..."
                       style={{ flex: 1, background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 8px", fontSize: T.fs2, fontFamily: T.mono, outline: "none", boxSizing: "border-box" }} />

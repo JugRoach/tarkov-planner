@@ -21,5 +21,15 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          leaflet: ['leaflet'],
+          supabase: ['@supabase/supabase-js'],
+        }
+      }
+    }
+  }
 })

@@ -19,8 +19,14 @@ export function useSquadRoom(myProfile) {
   const [leaderId, setLeaderId] = useState(null); // device_id of leader, null = no leader
   const [sharedRoute, setSharedRoute] = useState(null); // route broadcast from leader
   const [sharedRouteConfig, setSharedRouteConfig] = useState(null); // {mapId, faction, routeMode, ...}
+  const [leaderStale, setLeaderStale] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const subRef = useRef(null);
   const roomSubRef = useRef(null);
+  const heartbeatRef = useRef(null);
+  const healthCheckRef = useRef(null);
+  const reconnectBackoffRef = useRef(1000);
+  const subscribeRef = useRef(null);
 
   const isLeader = leaderId === deviceId;
   const hasLeader = leaderId !== null;
@@ -35,6 +41,41 @@ export function useSquadRoom(myProfile) {
     ).then(({ error: e }) => { if (e && import.meta.env.DEV) console.warn("[TG] Room profile sync failed:", e); });
   }, [roomId, myProfile?.name, myProfile?.color, myProfile?.tasks?.length, JSON.stringify(myProfile?.progress)]);
 
+  // Leader heartbeat: update heartbeat_at in route_config every 15s
+  useEffect(() => {
+    if (!supabase || !roomId || !isLeader) {
+      if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+      return;
+    }
+    const sendHeartbeat = async () => {
+      const { data } = await supabase.from("squad_rooms").select("route_config").eq("id", roomId).single();
+      const existing = data?.route_config || {};
+      await supabase.from("squad_rooms").update({ route_config: { ...existing, heartbeat_at: new Date().toISOString() } }).eq("id", roomId);
+    };
+    sendHeartbeat(); // send immediately on becoming leader
+    heartbeatRef.current = setInterval(sendHeartbeat, 15000);
+    return () => { if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; } };
+  }, [roomId, isLeader]);
+
+  // Leader health check: non-leaders check heartbeat_at every 20s
+  useEffect(() => {
+    if (!supabase || !roomId || isLeader || !hasLeader) {
+      setLeaderStale(false);
+      if (healthCheckRef.current) { clearInterval(healthCheckRef.current); healthCheckRef.current = null; }
+      return;
+    }
+    const checkHealth = async () => {
+      const { data } = await supabase.from("squad_rooms").select("route_config").eq("id", roomId).single();
+      const hb = data?.route_config?.heartbeat_at;
+      if (!hb) { setLeaderStale(true); return; }
+      const age = Date.now() - new Date(hb).getTime();
+      setLeaderStale(age > 45000);
+    };
+    checkHealth(); // check immediately
+    healthCheckRef.current = setInterval(checkHealth, 20000);
+    return () => { if (healthCheckRef.current) { clearInterval(healthCheckRef.current); healthCheckRef.current = null; } };
+  }, [roomId, isLeader, hasLeader]);
+
   // Push preferences (extract vote, ready state) separately so they don't conflict with profile syncs
   const updatePreferences = useCallback(async (prefs) => {
     if (!supabase || !roomId) return;
@@ -43,6 +84,17 @@ export function useSquadRoom(myProfile) {
     const merged = { ...(current?.preferences || {}), ...prefs };
     await supabase.from("squad_members").update({ preferences: merged }).eq("room_id", roomId).eq("device_id", deviceId);
   }, [roomId, deviceId]);
+
+  // Reconnect a channel with exponential backoff (uses subscribeRef to avoid circular deps)
+  const reconnectChannel = useCallback((rid, channelType) => {
+    const delay = reconnectBackoffRef.current;
+    setReconnecting(true);
+    if (import.meta.env.DEV) console.warn(`[TG] ${channelType} channel disconnected, retrying in ${delay}ms`);
+    setTimeout(() => {
+      if (subscribeRef.current) subscribeRef.current(rid);
+    }, delay);
+    reconnectBackoffRef.current = Math.min(delay * 2, 30000);
+  }, []);
 
   // Subscribe to room members AND room changes (for leader/route)
   const subscribeToRoom = useCallback((rid) => {
@@ -79,7 +131,10 @@ export function useSquadRoom(myProfile) {
           });
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") { setReconnecting(false); reconnectBackoffRef.current = 1000; }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { reconnectChannel(rid, "members"); }
+      });
     subRef.current = memberChannel;
 
     // Realtime: room (leader changes, route broadcasts)
@@ -90,9 +145,15 @@ export function useSquadRoom(myProfile) {
         setSharedRoute(row.route || null);
         setSharedRouteConfig(row.route_config || null);
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") { setReconnecting(false); reconnectBackoffRef.current = 1000; }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") { reconnectChannel(rid, "room-state"); }
+      });
     roomSubRef.current = roomChannel;
-  }, [deviceId]);
+  }, [deviceId, reconnectChannel]);
+
+  // Keep ref in sync so reconnectChannel can call latest subscribeToRoom
+  useEffect(() => { subscribeRef.current = subscribeToRoom; }, [subscribeToRoom]);
 
   const createRoom = useCallback(async () => {
     if (!supabase) { setError("Supabase not configured"); return; }
@@ -121,6 +182,8 @@ export function useSquadRoom(myProfile) {
   }, [subscribeToRoom]);
 
   const leaveRoom = useCallback(async () => {
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
+    if (healthCheckRef.current) { clearInterval(healthCheckRef.current); healthCheckRef.current = null; }
     if (subRef.current && supabase) { supabase.removeChannel(subRef.current); subRef.current = null; }
     if (roomSubRef.current && supabase) { supabase.removeChannel(roomSubRef.current); roomSubRef.current = null; }
     if (supabase && roomId) {
@@ -130,6 +193,8 @@ export function useSquadRoom(myProfile) {
     }
     setRoomId(null); setRoomCode(null); setMembers([]); setStatus("idle"); setError(null);
     setLeaderId(null); setSharedRoute(null); setSharedRouteConfig(null);
+    setLeaderStale(false); setReconnecting(false);
+    reconnectBackoffRef.current = 1000;
   }, [roomId, deviceId, isLeader]);
 
   // Claim / release leadership
@@ -140,6 +205,7 @@ export function useSquadRoom(myProfile) {
 
   const releaseLeader = useCallback(async () => {
     if (!supabase || !roomId) return;
+    if (heartbeatRef.current) { clearInterval(heartbeatRef.current); heartbeatRef.current = null; }
     await supabase.from("squad_rooms").update({ leader_id: null, route: null, route_config: null }).eq("id", roomId);
   }, [roomId]);
 
@@ -152,6 +218,8 @@ export function useSquadRoom(myProfile) {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (healthCheckRef.current) clearInterval(healthCheckRef.current);
       if (subRef.current && supabase) supabase.removeChannel(subRef.current);
       if (roomSubRef.current && supabase) supabase.removeChannel(roomSubRef.current);
     };
@@ -176,6 +244,8 @@ export function useSquadRoom(myProfile) {
     createRoom, joinRoom, leaveRoom,
     // Leader
     leaderId, isLeader, hasLeader, claimLeader, releaseLeader,
+    // Leader health
+    leaderStale, reconnecting,
     // Route broadcast
     sharedRoute, sharedRouteConfig, broadcastRoute,
     // Preferences

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { T } from '../theme.js';
 import { SL, Badge, Btn, Tip } from './ui/index.js';
 import { getObjMeta } from '../lib/utils.js';
@@ -11,14 +11,14 @@ export default function MapRecommendation({ allProfiles, activeIds, apiTasks, ap
   const [mode, setMode] = useState("tasks"); // "tasks", "hideout", "looking"
   const [lookPath, setLookPath] = useState([]); // drill-down path of category ids
   const [expandedTask, setExpandedTask] = useState(null);
-  const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
+  const traderImgMap = useMemo(() => Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink])), [apiTraders]);
 
-  const profiles = activeIds.size > 0
+  const profiles = useMemo(() => activeIds.size > 0
     ? allProfiles.filter(p => activeIds.has(p.id))
-    : allProfiles;
+    : allProfiles, [activeIds, allProfiles]);
   const scope = activeIds.size > 0 ? `${activeIds.size} active` : "all";
 
-  const taskRanked = computeMapRecommendation(profiles, apiTasks);
+  const taskRanked = useMemo(() => computeMapRecommendation(profiles, apiTasks), [profiles, apiTasks]);
 
   // Item-based recommendation
   let itemRanked = [];

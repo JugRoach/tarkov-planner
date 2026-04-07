@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { T } from '../theme.js';
@@ -20,8 +20,8 @@ export default function MapOverlay({ apiMap, emap, route, conflicts, onConflictR
   const bounds = apiMap ? MAP_BOUNDS[apiMap.normalizedName] : null;
   const svgName = apiMap ? MAP_SVG_NAMES[apiMap.normalizedName] : null;
   const svgUrl = svgName ? `https://assets.tarkov.dev/maps/svg/${svgName}.svg` : null;
-  const objWaypoints = route.filter(w => w.pct && !w.isExtract);
-  const extractWaypoints = route.filter(w => w.pct && w.isExtract);
+  const objWaypoints = useMemo(() => route.filter(w => w.pct && !w.isExtract), [route]);
+  const extractWaypoints = useMemo(() => route.filter(w => w.pct && w.isExtract), [route]);
 
   // Map scale: use 1000x1000 coordinate space so Leaflet zoom levels work naturally
   const MAP_SCALE = 1000;
@@ -30,26 +30,26 @@ export default function MapOverlay({ apiMap, emap, route, conflicts, onConflictR
   const mapBounds = [[0, 0], [MAP_SCALE, MAP_SCALE]];
 
   // Pre-compute layer data positions
-  const bossMarkers = (apiMap?.bosses || []).map(b => {
+  const bossMarkers = useMemo(() => (apiMap?.bosses || []).map(b => {
     return { name: b.boss?.name, chance: Math.round((b.spawnChance || 0) * 100), locations: (b.spawnLocations || []).map(l => ({ name: l.name, chance: Math.round((l.chance || 0) * 100) })), escorts: b.escorts || [], trigger: b.spawnTrigger };
-  }).filter(b => b.chance > 0);
+  }).filter(b => b.chance > 0), [apiMap]);
 
-  const hazardPolys = (apiMap?.hazards || []).filter(h => h.outline?.length > 2).map(h => ({
+  const hazardPolys = useMemo(() => (apiMap?.hazards || []).filter(h => h.outline?.length > 2).map(h => ({
     type: h.hazardType,
     points: h.outline.map(p => worldToPct(p, bounds)).filter(Boolean),
-  })).filter(h => h.points.length > 2);
+  })).filter(h => h.points.length > 2), [apiMap]);
 
-  const stashMarkers = (apiMap?.lootContainers || []).filter(c =>
+  const stashMarkers = useMemo(() => (apiMap?.lootContainers || []).filter(c =>
     c.lootContainer?.name && (c.lootContainer.name.includes("Buried barrel") || c.lootContainer.name.includes("Ground cache")) && c.position
-  ).map(c => ({ pct: worldToPct(c.position, bounds), name: c.lootContainer.name })).filter(c => c.pct);
+  ).map(c => ({ pct: worldToPct(c.position, bounds), name: c.lootContainer.name })).filter(c => c.pct), [apiMap]);
 
-  const lockMarkers = (apiMap?.locks || []).filter(l => l.position && l.key?.name).map(l => ({
+  const lockMarkers = useMemo(() => (apiMap?.locks || []).filter(l => l.position && l.key?.name).map(l => ({
     pct: worldToPct(l.position, bounds), key: l.key.name, needsPower: l.needsPower, type: l.lockType,
-  })).filter(l => l.pct);
+  })).filter(l => l.pct), [apiMap]);
 
-  const btrMarkers = (apiMap?.btrStops || []).map(s => ({
+  const btrMarkers = useMemo(() => (apiMap?.btrStops || []).map(s => ({
     pct: worldToPct({ x: s.x, y: 0, z: s.z }, bounds), name: s.name,
-  })).filter(s => s.pct);
+  })).filter(s => s.pct), [apiMap]);
 
   const hasLayerData = (id) => {
     if (id === "bosses") return bossMarkers.length > 0;
@@ -208,7 +208,7 @@ export default function MapOverlay({ apiMap, emap, route, conflicts, onConflictR
       {/* Layer toggles */}
       <div style={{ display: "flex", gap: 4, marginBottom: 6, flexWrap: "wrap" }}>
         {LAYER_DEFS.filter(l => hasLayerData(l.id)).map(l => (
-          <button key={l.id} onClick={() => toggleLayer(l.id)}
+          <button key={l.id} onClick={() => toggleLayer(l.id)} aria-pressed={layers[l.id]}
             style={{ background: layers[l.id] ? (l.id === "bosses" ? "#2a1414" : l.id === "hazards" ? "#2a2014" : l.id === "stashes" ? "#142a14" : l.id === "locks" ? "#2a2a14" : l.id === "btr" ? "#141a2a" : T.gold + "22") : "transparent",
               border: `1px solid ${layers[l.id] ? (l.id === "bosses" ? "#5a2020" : l.id === "hazards" ? "#5a4020" : l.id === "stashes" ? "#2a5a2a" : l.id === "locks" ? "#5a5a20" : l.id === "btr" ? "#2a4060" : T.gold) : T.border}`,
               color: layers[l.id] ? (l.id === "bosses" ? T.error : l.id === "hazards" ? T.orange : l.id === "stashes" ? T.success : l.id === "locks" ? "#d4b84a" : l.id === "btr" ? T.blue : T.gold) : T.textDim,
@@ -218,7 +218,7 @@ export default function MapOverlay({ apiMap, emap, route, conflicts, onConflictR
         ))}
       </div>
       {svgUrl ? (
-        <div ref={mapContainerRef} style={{ height: "60vh", minHeight: 350, maxHeight: 600, background: T.inputBg, border: `1px solid ${T.border}` }} />
+        <div ref={mapContainerRef} aria-label={(apiMap?.name || "Map") + " map"} style={{ height: "60vh", minHeight: 350, maxHeight: 600, background: T.inputBg, border: `1px solid ${T.border}` }} />
       ) : (
         <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: T.inputBg, border: `1px solid ${T.border}` }}>
           <div style={{ color: T.textDim, fontSize: T.fs4, fontFamily: T.sans }}>Select a map above</div>

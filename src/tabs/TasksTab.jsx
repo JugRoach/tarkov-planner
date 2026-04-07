@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { T } from '../theme.js';
 import { SL, Badge, Btn, Tip } from '../components/ui/index.js';
 import { getObjMeta, getAllPrereqTaskIds } from '../lib/utils.js';
@@ -19,10 +19,10 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
   const [hideoutPrereq, setHideoutPrereq] = useState(null);
   const [expandedStation, setExpandedStation] = useState(null);
 
-  const traders = [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort);
-  const traderImgMap = Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink]));
-  const taskMaps = [...new Set((apiTasks || []).map(t => t.map?.name).filter(Boolean))].sort();
-  const taskDepths = computeTaskDepths(apiTasks);
+  const traders = useMemo(() => [...new Set((apiTasks || []).map(t => t.trader?.name).filter(Boolean))].sort(traderSort), [apiTasks]);
+  const traderImgMap = useMemo(() => Object.fromEntries((apiTraders || []).map(t => [t.name, t.imageLink])), [apiTraders]);
+  const taskMaps = useMemo(() => [...new Set((apiTasks || []).map(t => t.map?.name).filter(Boolean))].sort(), [apiTasks]);
+  const taskDepths = useMemo(() => computeTaskDepths(apiTasks), [apiTasks]);
   const progressionSort = (a, b) => {
     const da = taskDepths[a.id] ?? 999, db = taskDepths[b.id] ?? 999;
     if (da !== db) return da - db;
@@ -30,14 +30,14 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
     if (la !== lb) return la - lb;
     return a.name.localeCompare(b.name);
   };
-  const filteredTasks = (apiTasks || []).filter(t => {
+  const filteredTasks = useMemo(() => (apiTasks || []).filter(t => {
     if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
     if (taskSearch && !t.name.toLowerCase().includes(taskSearchDeferred.toLowerCase())) return false;
     return true;
-  }).slice(0, 50);
+  }).slice(0, 50), [apiTasks, taskTrader, taskMapFilter, taskSearch, taskSearchDeferred]);
 
-  const addTask = taskId => {
+  const addTask = useCallback(taskId => {
     const existing = myProfile.tasks || [];
     if (existing.some(t => t.taskId === taskId)) return;
     const prereqIds = [...new Set(getAllPrereqTaskIds(taskId, apiTasks))];
@@ -49,12 +49,12 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
       if (prereqTask) newProgress = markTaskCompleteInProgress(myProfile.id, prereqId, prereqTask, newProgress);
     });
     saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
-  };
-  const removeTask = taskId => {
+  }, [myProfile, apiTasks, saveMyProfile]);
+  const removeTask = useCallback(taskId => {
     const newTasks = (myProfile.tasks || []).filter(t => t.taskId !== taskId);
     const newProgress = cleanOrphanedPrereqProgress(myProfile.id, newTasks, apiTasks, myProfile.progress || {});
     saveMyProfile({ ...myProfile, tasks: newTasks, progress: newProgress });
-  };
+  }, [myProfile, apiTasks, saveMyProfile]);
 
   // Browse tasks data (always computed, used by Browse sub-tab)
   const traderTaskCounts = {};
@@ -64,12 +64,12 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
     traderTaskCounts[tr] = { total: trTasks.length, added: addedCount };
   });
   const browseLimit = taskTrader !== "all" ? 999 : 50;
-  const browseTasks = (apiTasks || []).filter(t => {
+  const browseTasks = useMemo(() => (apiTasks || []).filter(t => {
     if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
     if (taskSearch && !t.name.toLowerCase().includes(taskSearchDeferred.toLowerCase())) return false;
     return true;
-  }).sort(progressionSort).slice(0, browseLimit);
+  }).sort(progressionSort).slice(0, browseLimit), [apiTasks, taskTrader, taskMapFilter, taskSearch, taskSearchDeferred, taskDepths, browseLimit]);
   const addAllForTrader = (traderName) => {
     const trTasks = (apiTasks || []).filter(t => t.trader?.name === traderName);
     let allTasks = [...(myProfile.tasks || [])];
@@ -102,9 +102,9 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
         {/* Sub-tabs */}
-        <div style={{ display: "flex", gap: 4 }}>
+        <div role="tablist" style={{ display: "flex", gap: 4 }}>
           {subTabs.map(st => (
-            <button key={st.id} onClick={() => setProfileSub(st.id)} style={{
+            <button key={st.id} role="tab" aria-selected={profileSub === st.id} onClick={() => setProfileSub(st.id)} style={{
               flex: 1, padding: "8px 4px", fontSize: T.fs2, letterSpacing: 1, fontFamily: T.sans, textTransform: "uppercase",
               background: profileSub === st.id ? myProfile.color + "22" : "transparent",
               border: `2px solid ${profileSub === st.id ? myProfile.color : T.border}`,
@@ -123,7 +123,7 @@ export default function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTrader
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: T.fs2, color: T.textDim, fontFamily: T.sans }}>{myProfile.tasks?.length || 0} selected</div>
             </div>
-            <input value={taskSearch} onChange={e => { setTaskSearch(e.target.value); clearTimeout(taskSearchDebounce.current); taskSearchDebounce.current = setTimeout(() => setTaskSearchDeferred(e.target.value), 200); }} placeholder="Search tasks..." style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
+            <input aria-label="Search tasks" value={taskSearch} onChange={e => { setTaskSearch(e.target.value); clearTimeout(taskSearchDebounce.current); taskSearchDebounce.current = setTimeout(() => setTaskSearchDeferred(e.target.value), 200); }} placeholder="Search tasks..." style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
             <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 6, fontFamily: T.sans }}>TRADERS<Tip text="Tap a trader to see their tasks. Use 'ADD ALL' to grab every task from that trader, or add them one by one." /></div>
             <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
               <button onClick={() => setTaskTrader("all")} style={{

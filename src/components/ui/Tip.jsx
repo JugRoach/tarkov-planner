@@ -7,6 +7,8 @@ export default function Tip({ text, step }) {
     <span style={{ position: "relative", display: "inline-flex", alignItems: "center", verticalAlign: "middle" }}>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        aria-expanded={open}
+        aria-label="Help"
         style={{
           width: 24, height: 24, borderRadius: "50%",
           background: open ? T.surfaceAlt : "transparent",
@@ -19,6 +21,7 @@ export default function Tip({ text, step }) {
       >?</button>
       {open && (
         <div
+          role="tooltip"
           onClick={(e) => e.stopPropagation()}
           style={{
             position: "absolute", top: 22, left: -8, zIndex: 50,

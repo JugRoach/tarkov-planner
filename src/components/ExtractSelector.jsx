@@ -65,11 +65,12 @@ export default function ExtractSelector({ player, mapData, faction, choice, onCh
       ) : (
         <div style={{ background: T.surface, border: `1px dashed ${T.border}`, padding: "8px 10px" }}>
           <div style={{ fontSize: T.fs3, color: T.textDim, marginBottom: 7 }}>Select extract for {player.name}:</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div role="radiogroup" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {usable.map(ext => {
               const c = ET_CONFIG[ext.type];
+              const isSelected = choice?.extract?.name === ext.name;
               return (
-                <button key={ext.name} onClick={() => handleSelect(ext)} style={{
+                <button key={ext.name} role="radio" aria-checked={isSelected} onClick={() => handleSelect(ext)} style={{
                   background: "transparent", border: `1px solid ${c.border}`,
                   borderLeft: `2px solid ${c.color}`, color: T.textBright,
                   padding: "7px 10px", textAlign: "left", cursor: "pointer",
