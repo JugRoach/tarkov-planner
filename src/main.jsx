@@ -55,7 +55,7 @@ window.storage = {
             { onConflict: 'user_id,key' }
           )
       } catch (e) {
-        console.warn('[TG] Supabase write failed:', e)
+        if (import.meta.env.DEV) console.warn('[TG] Supabase write failed:', e)
       }
     }
     return { key, value }

@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Component } from "react";
 import { supabase } from "./supabase.js";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
 const T = {
-  bg:"#0d0e10",surface:"#1a1917",surfaceAlt:"#222018",surfaceHover:"#2a2720",border:"#2d2a24",borderBright:"#3d3930",gold:"#d2af78",text:"#c7c5b3",textDim:"#6a6458",textMid:"#8a8478",textBright:"#f0ead8",
+  bg:"#0d0e10",surface:"#1a1917",surfaceAlt:"#222018",surfaceHover:"#2a2720",border:"#2d2a24",borderBright:"#3d3930",gold:"#d2af78",text:"#c7c5b3",textDim:"#8a8070",textMid:"#8a8478",textBright:"#f0ead8",
   sans:"'Bender','Segoe UI',-apple-system,Roboto,sans-serif",mono:"'Courier New',Consolas,monospace",
   // Semantic colors
   error:"#d44040",errorBg:"#1f1414",errorBorder:"#4a2020",
@@ -38,7 +38,7 @@ const traderSort = (a, b) => { const ia = TRADER_ORDER.indexOf(a); const ib = TR
 
 // ─── SHARE CODES ─────────────────────────────────────────────────────────
 function encodeProfile(p){try{return CODE_VERSION+":"+btoa(unescape(encodeURIComponent(JSON.stringify({v:2,n:p.name,c:p.color,t:p.tasks||[],pr:p.progress||{}}))));}catch{return null;}}
-function decodeProfile(code){try{const b64=code.trim().startsWith(CODE_VERSION+":")?code.trim().slice(CODE_VERSION.length+1):code.trim();const d=JSON.parse(decodeURIComponent(escape(atob(b64))));if(!d.n)return null;return{id:"imp_"+Date.now()+"_"+Math.random().toString(36).slice(2,5),name:d.n,color:d.c||PLAYER_COLORS[0],tasks:d.t||[],progress:d.pr||{},imported:true,importedAt:Date.now()};}catch{return null;}}
+function decodeProfile(code){try{if(!code||code.length>50000)return null;const b64=code.trim().startsWith(CODE_VERSION+":")?code.trim().slice(CODE_VERSION.length+1):code.trim();const d=JSON.parse(decodeURIComponent(escape(atob(b64))));if(!d.n||typeof d.n!=="string")return null;return{id:"imp_"+Date.now()+"_"+Math.random().toString(36).slice(2,5),name:d.n.slice(0,30),color:d.c||PLAYER_COLORS[0],tasks:Array.isArray(d.t)?d.t:[],progress:d.pr&&typeof d.pr==="object"?d.pr:{},imported:true,importedAt:Date.now()};}catch{return null;}}
 
 // ─── BUILD SHARE CODES ──────────────────────────────────────────────────
 const BUILD_CODE_VERSION = "TGB";
@@ -128,7 +128,7 @@ function itemCatsToLootTypes(categories) {
   if (types.size === 0) types.add("mixed");
   return types;
 }
-const ITEMS_SEARCH_Q = (term) => `{items(name:"${term.replace(/"/g,"")}", limit:20){id name shortName types categories{name}}}`;
+const ITEMS_SEARCH_Q = (term) => `{items(name:"${term.replace(/["\\\n\r]/g,"")}", limit:20){id name shortName types categories{name}}}`;
 
 // Hierarchical "What are you looking for?" categories
 // tags: matched against loot point tags. subs: optional drill-down.
@@ -552,6 +552,14 @@ function getObjMeta(obj){const t=obj.type;
   if(t==="traderStanding")return{icon:"★",color:"#c8a84b",summary:obj.trader?`${obj.trader.name} rep ${obj.compareMethod||"≥"} ${obj.value}`:obj.description,isCountable:false,total:1};
   if(t==="playerLevel")return{icon:"◆",color:"#5aba8a",summary:obj.playerLevel?`Reach level ${obj.playerLevel}`:obj.description,isCountable:false,total:1};
   return{icon:"♦",color:"#7a9a7a",summary:obj.description||t,isCountable:false,total:1};}
+
+// ─── SHARED UTILITIES ────────────────────────────────────────────────────
+function progressKey(profileId, taskId, objId) { return `${profileId}-${taskId}-${objId}`; }
+function isTaskComplete(profileId, taskId, apiTask, progress) {
+  const reqObjs = (apiTask?.objectives || []).filter(o => !o.optional);
+  if (!reqObjs.length) return false;
+  return reqObjs.every(obj => ((progress || {})[progressKey(profileId, taskId, obj.id)] || 0) >= getObjMeta(obj).total);
+}
 
 // ─── PREREQUISITE HELPERS ─────────────────────────────────────────────────
 function getAllPrereqTaskIds(taskId, apiTasks, visited = new Set()) {
@@ -1367,12 +1375,17 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
   );
 }
 
-// ─── MAP OVERLAY ─────────────────────────────────────────────────────────
-// Inject dark-theme popup styles for Leaflet
-if (typeof document !== "undefined" && !document.getElementById("tg-leaflet-css")) {
+// ─── GLOBAL CSS (hover/focus states, Leaflet theme) ─────────────────────
+if (typeof document !== "undefined" && !document.getElementById("tg-global-css")) {
   const style = document.createElement("style");
-  style.id = "tg-leaflet-css";
+  style.id = "tg-global-css";
   style.textContent = `
+    /* Focus & hover states for accessibility */
+    button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid #d2af78; outline-offset: 2px; }
+    button:hover { filter: brightness(1.15); }
+    button:active { filter: brightness(0.9); }
+    input:focus, textarea:focus { border-color: #d2af78 !important; }
+    /* Leaflet dark theme */
     .tg-popup .leaflet-popup-content-wrapper { background: rgba(13,17,23,0.95); color: #f0ead8; border: 1px solid #3d3930; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
     .tg-popup .leaflet-popup-content { margin: 8px 10px; font-family: 'Courier New', Consolas, monospace; font-size: 12px; }
     .tg-popup .leaflet-popup-tip { background: rgba(13,17,23,0.95); border: 1px solid #3d3930; }
@@ -1382,6 +1395,24 @@ if (typeof document !== "undefined" && !document.getElementById("tg-leaflet-css"
   `;
   document.head.appendChild(style);
 }
+
+// ─── ERROR BOUNDARY ─────────────────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) return (
+      <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0d0e10", color: "#c7c5b3", fontFamily: "'Courier New', monospace", padding: 20, textAlign: "center" }}>
+        <div style={{ fontSize: 24, color: "#d2af78", marginBottom: 12 }}>Something went wrong</div>
+        <div style={{ fontSize: 14, color: "#8a8070", marginBottom: 20, maxWidth: 400 }}>{String(this.state.error?.message || "Unknown error")}</div>
+        <button onClick={() => window.location.reload()} style={{ background: "#d2af78", color: "#0d0e10", border: "none", padding: "12px 24px", fontSize: 16, cursor: "pointer", fontFamily: "'Courier New', monospace", fontWeight: "bold" }}>RELOAD APP</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+
+// ─── MAP OVERLAY ─────────────────────────────────────────────────────────
 const MAP_SVG_NAMES = {customs:"Customs",factory:"Factory",woods:"Woods",interchange:"Interchange",shoreline:"Shoreline",reserve:"Reserve",lighthouse:"Lighthouse","streets-of-tarkov":"StreetsOfTarkov","the-lab":"Labs","ground-zero":"GroundZero"};
 const LAYER_DEFS = [
   { id: "route", label: "Route", icon: "━", default: true },
@@ -1489,6 +1520,7 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
     if (!map) return;
     const groups = layerGroupsRef.current;
     Object.values(groups).forEach(g => g.clearLayers());
+    const esc = (s) => String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 
     const popupOpts = { className: "tg-popup", closeButton: false, autoPan: false, maxWidth: 220 };
     const mkIcon = (html, size) => L.divIcon({ html, className: "", iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
@@ -1511,8 +1543,8 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
         const marker = L.marker(toLL(w.pct), {
           icon: mkIcon(`<div style="position:relative;width:32px;height:32px;border-radius:50%;background:${T.bg};border:3px solid ${col};display:flex;align-items:center;justify-content:center;color:${col};font:bold 14px ${T.mono}">${i + 1}${playerDots}</div>`, 32),
         });
-        const popupContent = `<div style="font:12px ${T.mono};color:${T.textBright}">${w.locationName || "Objective " + (i + 1)}</div>` +
-          w.players.map(p => `<div style="font:11px ${T.sans};color:${p.color};margin-top:3px">${p.name}: ${p.objective}${p.total > 1 ? " (" + p.progress + "/" + p.total + ")" : ""}</div>`).join("");
+        const popupContent = `<div style="font:12px ${T.mono};color:${T.textBright}">${esc(w.locationName || "Objective " + (i + 1))}</div>` +
+          w.players.map(p => `<div style="font:11px ${T.sans};color:${p.color};margin-top:3px">${esc(p.name)}: ${esc(p.objective)}${p.total > 1 ? " (" + p.progress + "/" + p.total + ")" : ""}</div>`).join("");
         marker.bindPopup(popupContent, popupOpts);
         routeGroup.addLayer(marker);
       });
@@ -1521,8 +1553,8 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
         const marker = L.marker(toLL(w.pct), {
           icon: mkIcon(`<div style="width:34px;height:34px;border-radius:50%;background:${T.successBg};border:3px solid ${T.success};display:flex;align-items:center;justify-content:center;color:${T.success};font:bold 15px ${T.mono}">⬆</div>`, 34),
         });
-        const popupContent = `<div style="font:bold 12px ${T.mono};color:${T.success}">EXTRACT — ${w.extractName}</div>` +
-          w.players.map(p => `<div style="font:11px ${T.sans};color:${T.success};opacity:0.8;margin-top:2px">${p.name}${p.missingItems?.length ? ' <span style="color:' + T.error + '">⚠ missing ' + p.missingItems.join(", ") + '</span>' : ""}</div>`).join("");
+        const popupContent = `<div style="font:bold 12px ${T.mono};color:${T.success}">EXTRACT — ${esc(w.extractName)}</div>` +
+          w.players.map(p => `<div style="font:11px ${T.sans};color:${T.success};opacity:0.8;margin-top:2px">${esc(p.name)}${p.missingItems?.length ? ' <span style="color:' + T.error + '">⚠ missing ' + esc(p.missingItems.join(", ")) + '</span>' : ""}</div>`).join("");
         marker.bindPopup(popupContent, popupOpts);
         routeGroup.addLayer(marker);
       });
@@ -1808,6 +1840,8 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
   const [chainTrader, setChainTrader] = useState("all");
   const [expandedChainNodes, setExpandedChainNodes] = useState(new Set());
   const [taskSearch, setTaskSearch] = useState("");
+  const taskSearchDebounce = useRef(null);
+  const [taskSearchDeferred, setTaskSearchDeferred] = useState("");
   const [taskTrader, setTaskTrader] = useState("all");
   const [taskMapFilter, setTaskMapFilter] = useState("all");
   const [expandedTask, setExpandedTask] = useState(null);
@@ -1829,7 +1863,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
   const filteredTasks = (apiTasks || []).filter(t => {
     if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
-    if (taskSearch && !t.name.toLowerCase().includes(taskSearch.toLowerCase())) return false;
+    if (taskSearch && !t.name.toLowerCase().includes(taskSearchDeferred.toLowerCase())) return false;
     return true;
   }).slice(0, 50);
 
@@ -1863,7 +1897,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
   const browseTasks = (apiTasks || []).filter(t => {
     if (taskTrader !== "all" && t.trader?.name !== taskTrader) return false;
     if (taskMapFilter !== "all" && t.map?.name !== taskMapFilter) return false;
-    if (taskSearch && !t.name.toLowerCase().includes(taskSearch.toLowerCase())) return false;
+    if (taskSearch && !t.name.toLowerCase().includes(taskSearchDeferred.toLowerCase())) return false;
     return true;
   }).sort(progressionSort).slice(0, browseLimit);
   const addAllForTrader = (traderName) => {
@@ -1919,7 +1953,7 @@ function TasksTab({ myProfile, saveMyProfile, apiTasks, apiTraders, loading, api
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: T.fs2, color: T.textDim, fontFamily: T.sans }}>{myProfile.tasks?.length || 0} selected</div>
             </div>
-            <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
+            <input value={taskSearch} onChange={e => { setTaskSearch(e.target.value); clearTimeout(taskSearchDebounce.current); taskSearchDebounce.current = setTimeout(() => setTaskSearchDeferred(e.target.value), 200); }} placeholder="Search tasks..." style={{ width: "100%", background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "7px 10px", fontSize: T.fs2, fontFamily: T.sans, outline: "none", boxSizing: "border-box", marginBottom: 8 }} />
             <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 6, fontFamily: T.sans }}>TRADERS<Tip text="Tap a trader to see their tasks. Use 'ADD ALL' to grab every task from that trader, or add them one by one." /></div>
             <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
               <button onClick={() => setTaskTrader("all")} style={{
@@ -2507,8 +2541,8 @@ function useSquadRoom(myProfile) {
     supabase.from("squad_members").upsert(
       { room_id: roomId, device_id: deviceId, profile: profileData, updated_at: new Date().toISOString() },
       { onConflict: "room_id,device_id" }
-    ).then(({ error: e }) => { if (e) console.warn("[TG] Room profile sync failed:", e); });
-  }, [roomId, myProfile?.name, myProfile?.color, myProfile?.tasks?.length, myProfile?.progress]);
+    ).then(({ error: e }) => { if (e && import.meta.env.DEV) console.warn("[TG] Room profile sync failed:", e); });
+  }, [roomId, myProfile?.name, myProfile?.color, myProfile?.tasks?.length, JSON.stringify(myProfile?.progress)]);
 
   // Push preferences (extract vote, ready state) separately so they don't conflict with profile syncs
   const updatePreferences = useCallback(async (prefs) => {
@@ -4075,7 +4109,7 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
             <div style={{ fontSize: T.fs3, color: T.textDim, letterSpacing: 1, fontFamily: T.sans, whiteSpace: "nowrap" }}>TASKS PER PERSON:</div>
             <div style={{ display: "flex", gap: 4 }}>
               {[1, 2, 3].map(n => (
-                <button key={n} onClick={() => setTasksPerPerson(n)} style={{ width: 32, height: 28, background: tasksPerPerson === n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === n ? T.gold : T.border}`, color: tasksPerPerson === n ? T.gold : T.textDim, fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, fontWeight: tasksPerPerson === n ? "bold" : "normal" }}>{n}</button>
+                <button key={n} onClick={() => setTasksPerPerson(n)} style={{ width: 44, height: 44, background: tasksPerPerson === n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === n ? T.gold : T.border}`, color: tasksPerPerson === n ? T.gold : T.textDim, fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, fontWeight: tasksPerPerson === n ? "bold" : "normal" }}>{n}</button>
               ))}
             </div>
             <div style={{ fontSize: T.fs2, color: T.textDim }}>{tasksPerPerson === 1 ? "Quick raid" : tasksPerPerson === 2 ? "Standard raid" : "Long raid"}</div>
@@ -4985,7 +5019,7 @@ function BottomNav({ tab, setTab }) {
 }
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────
-export default function TarkovGuide() {
+function TarkovGuideInner() {
   const [tab, setTab] = useState("tasks");
   const [myProfile, saveMyProfile, profileReady] = useStorage("tg-myprofile-v3", { id: "me_" + Math.random().toString(36).slice(2, 10), name: "", color: PLAYER_COLORS[0], tasks: [], progress: {} });
   const [apiMaps, setApiMaps] = useState(null);
@@ -5098,4 +5132,7 @@ export default function TarkovGuide() {
     </div>
     </div>
   );
+}
+export default function TarkovGuide() {
+  return <ErrorBoundary><TarkovGuideInner /></ErrorBoundary>;
 }
