@@ -1,0 +1,3 @@
+import { T } from '../../theme.js';
+
+export default ({ch,onClick,active,color=T.gold,compact,style={},disabled})=><button onClick={disabled?undefined:onClick} style={{background:active?color+"22":"rgba(210,175,120,0.06)",color:disabled?T.textDim:(active?color:T.text),border:active?`2px solid ${color}`:`1px solid rgba(210,175,120,0.12)`,padding:compact?`8px ${T.sp3}px`:`${T.sp3}px ${T.sp4}px`,fontSize:compact?T.fs2:T.fs3,letterSpacing:1,cursor:disabled?"default":"pointer",fontFamily:T.sans,textTransform:"uppercase",whiteSpace:"nowrap",fontWeight:active?"bold":"normal",transition:"all 0.15s ease",borderRadius:T.r1,minHeight:T.touch,...style}}>{ch}</button>;
