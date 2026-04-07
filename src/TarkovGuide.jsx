@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "./supabase.js";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 const T = {
   bg:"#0d0e10",surface:"#1a1917",surfaceAlt:"#222018",surfaceHover:"#2a2720",border:"#2d2a24",borderBright:"#3d3930",gold:"#d2af78",text:"#c7c5b3",textDim:"#6a6458",textMid:"#8a8478",textBright:"#f0ead8",
@@ -1366,6 +1368,20 @@ function ExtractSelector({ player, mapData, faction, choice, onChoice }) {
 }
 
 // ─── MAP OVERLAY ─────────────────────────────────────────────────────────
+// Inject dark-theme popup styles for Leaflet
+if (typeof document !== "undefined" && !document.getElementById("tg-leaflet-css")) {
+  const style = document.createElement("style");
+  style.id = "tg-leaflet-css";
+  style.textContent = `
+    .tg-popup .leaflet-popup-content-wrapper { background: rgba(13,17,23,0.95); color: #f0ead8; border: 1px solid #3d3930; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    .tg-popup .leaflet-popup-content { margin: 8px 10px; font-family: 'Courier New', Consolas, monospace; font-size: 12px; }
+    .tg-popup .leaflet-popup-tip { background: rgba(13,17,23,0.95); border: 1px solid #3d3930; }
+    .leaflet-container { background: #0d0e10 !important; }
+    .leaflet-control-zoom a { background: #1a1917 !important; color: #d2af78 !important; border-color: #2d2a24 !important; }
+    .leaflet-control-zoom a:hover { background: #2a2720 !important; }
+  `;
+  document.head.appendChild(style);
+}
 const MAP_SVG_NAMES = {customs:"Customs",factory:"Factory",woods:"Woods",interchange:"Interchange",shoreline:"Shoreline",reserve:"Reserve",lighthouse:"Lighthouse","streets-of-tarkov":"StreetsOfTarkov","the-lab":"Labs","ground-zero":"GroundZero"};
 const LAYER_DEFS = [
   { id: "route", label: "Route", icon: "━", default: true },
@@ -1376,27 +1392,27 @@ const LAYER_DEFS = [
   { id: "btr", label: "BTR", icon: "▣", default: false },
 ];
 function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
-  const [imgLoaded, setImgLoaded] = useState(false);
-  const [imgErr, setImgErr] = useState(false);
-  const [hoveredNode, setHoveredNode] = useState(null);
   const [layers, setLayers] = useState(() => {
     const d = {};
     LAYER_DEFS.forEach(l => { d[l.id] = l.default; });
     return d;
   });
   const toggleLayer = id => setLayers(prev => ({ ...prev, [id]: !prev[id] }));
-  const mapRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const layerGroupsRef = useRef({});
+  const imageOverlayRef = useRef(null);
   const bounds = apiMap ? MAP_BOUNDS[apiMap.normalizedName] : null;
   const svgName = apiMap ? MAP_SVG_NAMES[apiMap.normalizedName] : null;
   const svgUrl = svgName ? `https://assets.tarkov.dev/maps/svg/${svgName}.svg` : null;
   const objWaypoints = route.filter(w => w.pct && !w.isExtract);
   const extractWaypoints = route.filter(w => w.pct && w.isExtract);
-  const allPositioned = route.filter(w => w.pct);
+
+  // Convert pct {x,y} (0-1, y-down) to Leaflet LatLng (y-up)
+  const toLL = (pct) => [1 - pct.y, pct.x];
 
   // Pre-compute layer data positions
   const bossMarkers = (apiMap?.bosses || []).map(b => {
-    const loc = b.spawnLocations?.[0];
-    // Boss spawn locations don't have x/y/z — they're named zones. We'll show them as a list instead of map pins.
     return { name: b.boss?.name, chance: Math.round((b.spawnChance || 0) * 100), locations: (b.spawnLocations || []).map(l => ({ name: l.name, chance: Math.round((l.chance || 0) * 100) })), escorts: b.escorts || [], trigger: b.spawnTrigger };
   }).filter(b => b.chance > 0);
 
@@ -1426,6 +1442,155 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
     return true;
   };
 
+  // Initialize Leaflet map once
+  useEffect(() => {
+    if (!mapContainerRef.current || leafletMapRef.current) return;
+    const map = L.map(mapContainerRef.current, {
+      crs: L.CRS.Simple,
+      minZoom: -1,
+      maxZoom: 5,
+      zoomSnap: 0.25,
+      zoomDelta: 0.5,
+      attributionControl: false,
+      zoomControl: false,
+    });
+    L.control.zoom({ position: "topright" }).addTo(map);
+    map.fitBounds([[0, 0], [1, 1]]);
+    leafletMapRef.current = map;
+    // Create layer groups
+    ["route", "hazards", "stashes", "locks", "btr"].forEach(id => {
+      layerGroupsRef.current[id] = L.layerGroup().addTo(map);
+    });
+    // Fix initial sizing after container is visible
+    setTimeout(() => map.invalidateSize(), 100);
+    return () => { map.remove(); leafletMapRef.current = null; layerGroupsRef.current = {}; };
+  }, []);
+
+  // Update image overlay when map changes
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    if (imageOverlayRef.current) { map.removeLayer(imageOverlayRef.current); imageOverlayRef.current = null; }
+    if (svgUrl) {
+      const overlay = L.imageOverlay(svgUrl, [[0, 0], [1, 1]]).addTo(map);
+      imageOverlayRef.current = overlay;
+      map.fitBounds([[0, 0], [1, 1]]);
+    }
+  }, [svgUrl]);
+
+  // Update all overlay layers when data changes
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    const groups = layerGroupsRef.current;
+    Object.values(groups).forEach(g => g.clearLayers());
+
+    const popupOpts = { className: "tg-popup", closeButton: false, autoPan: false, maxWidth: 220 };
+    const mkIcon = (html, size) => L.divIcon({ html, className: "", iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+
+    // ── Route layer ──
+    const routeGroup = groups.route;
+    if (routeGroup) {
+      // Spawn marker
+      routeGroup.addLayer(L.marker(toLL({ x: 0.5, y: 0.5 }), {
+        icon: mkIcon(`<div style="width:28px;height:28px;border-radius:50%;background:${T.successBg};border:3px solid ${T.success};display:flex;align-items:center;justify-content:center;color:${T.success};font:bold 14px ${T.mono}">S</div>`, 28),
+        interactive: false,
+      }));
+      // Spawn to first objective
+      if (objWaypoints[0]) {
+        routeGroup.addLayer(L.polyline([toLL({ x: 0.5, y: 0.5 }), toLL(objWaypoints[0].pct)], { color: T.success, weight: 3, dashArray: "10,6", opacity: 0.7 }));
+      }
+      // Route polyline
+      if (objWaypoints.length > 1) {
+        routeGroup.addLayer(L.polyline(objWaypoints.map(w => toLL(w.pct)), { color: T.gold, weight: 4, dashArray: "12,6", opacity: 0.85 }));
+      }
+      // Last objective to extract
+      if (objWaypoints.length > 0 && extractWaypoints[0]) {
+        routeGroup.addLayer(L.polyline([toLL(objWaypoints[objWaypoints.length - 1].pct), toLL(extractWaypoints[0].pct)], { color: T.success, weight: 4, dashArray: "12,6", opacity: 0.8 }));
+      }
+      // Objective waypoints
+      objWaypoints.forEach((w, i) => {
+        const col = w.players[0]?.color || T.gold;
+        const playerDots = w.players.slice(1, 3).map((p, pi) => `<div style="position:absolute;top:-6px;right:${-10 - pi * 14}px;width:14px;height:14px;border-radius:50%;background:${p.color};border:2px solid ${T.bg}"></div>`).join("");
+        const marker = L.marker(toLL(w.pct), {
+          icon: mkIcon(`<div style="position:relative;width:32px;height:32px;border-radius:50%;background:${T.bg};border:3px solid ${col};display:flex;align-items:center;justify-content:center;color:${col};font:bold 14px ${T.mono}">${i + 1}${playerDots}</div>`, 32),
+        });
+        const popupContent = `<div style="font:12px ${T.mono};color:${T.textBright}">${w.locationName || "Objective " + (i + 1)}</div>` +
+          w.players.map(p => `<div style="font:11px ${T.sans};color:${p.color};margin-top:3px">${p.name}: ${p.objective}${p.total > 1 ? " (" + p.progress + "/" + p.total + ")" : ""}</div>`).join("");
+        marker.bindPopup(popupContent, popupOpts);
+        routeGroup.addLayer(marker);
+      });
+      // Extract waypoints
+      extractWaypoints.forEach(w => {
+        const marker = L.marker(toLL(w.pct), {
+          icon: mkIcon(`<div style="width:34px;height:34px;border-radius:50%;background:${T.successBg};border:3px solid ${T.success};display:flex;align-items:center;justify-content:center;color:${T.success};font:bold 15px ${T.mono}">⬆</div>`, 34),
+        });
+        const popupContent = `<div style="font:bold 12px ${T.mono};color:${T.success}">EXTRACT — ${w.extractName}</div>` +
+          w.players.map(p => `<div style="font:11px ${T.sans};color:${T.success};opacity:0.8;margin-top:2px">${p.name}${p.missingItems?.length ? ' <span style="color:' + T.error + '">⚠ missing ' + p.missingItems.join(", ") + '</span>' : ""}</div>`).join("");
+        marker.bindPopup(popupContent, popupOpts);
+        routeGroup.addLayer(marker);
+      });
+    }
+
+    // ── Hazard zones ──
+    const hazardGroup = groups.hazards;
+    if (hazardGroup) {
+      hazardPolys.forEach(h => {
+        const color = h.type === "minefield" ? "#e05a5a" : h.type === "sniper" ? "#d4943a" : "#b45ae0";
+        const fillColor = color;
+        hazardGroup.addLayer(L.polygon(h.points.map(p => toLL(p)), {
+          color, weight: 2, fillColor, fillOpacity: 0.15, opacity: 0.7,
+          dashArray: h.type === "minefield" ? "6,3" : undefined,
+        }));
+      });
+    }
+
+    // ── Stash markers ──
+    const stashGroup = groups.stashes;
+    if (stashGroup) {
+      stashMarkers.forEach(s => {
+        const marker = L.circleMarker(toLL(s.pct), { radius: 6, color: T.success, fillColor: T.successBg, fillOpacity: 0.8, weight: 2 });
+        marker.bindPopup(`<div style="font:12px ${T.mono};color:${T.success}">${s.name}</div>`, popupOpts);
+        stashGroup.addLayer(marker);
+      });
+    }
+
+    // ── Lock markers ──
+    const lockGroup = groups.locks;
+    if (lockGroup) {
+      lockMarkers.forEach(l => {
+        const col = l.needsPower ? T.orange : "#d4b84a";
+        const marker = L.marker(toLL(l.pct), {
+          icon: mkIcon(`<div style="width:16px;height:16px;border-radius:3px;background:${l.needsPower ? T.orangeBg : "#2a2a14"};border:2px solid ${col};display:flex;align-items:center;justify-content:center;color:${col};font:bold 9px ${T.mono}">⚿</div>`, 16),
+        });
+        marker.bindPopup(`<div style="font:12px ${T.mono};color:${col}">${l.key}${l.needsPower ? " (needs power)" : ""}</div>`, popupOpts);
+        lockGroup.addLayer(marker);
+      });
+    }
+
+    // ── BTR stops ──
+    const btrGroup = groups.btr;
+    if (btrGroup) {
+      btrMarkers.forEach(b => {
+        const marker = L.marker(toLL(b.pct), {
+          icon: mkIcon(`<div style="width:22px;height:22px;border-radius:4px;background:${T.blueBg};border:2px solid ${T.blue};display:flex;align-items:center;justify-content:center;color:${T.blue};font:bold 11px ${T.mono}">B</div>`, 22),
+        });
+        marker.bindPopup(`<div style="font:12px ${T.mono};color:${T.blue}">BTR: ${b.name}</div>`, popupOpts);
+        btrGroup.addLayer(marker);
+      });
+    }
+  }, [apiMap, route, bounds, objWaypoints.length, extractWaypoints.length, stashMarkers.length, lockMarkers.length, btrMarkers.length, hazardPolys.length]);
+
+  // Toggle layer visibility
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    if (!map) return;
+    Object.entries(layerGroupsRef.current).forEach(([id, group]) => {
+      if (layers[id]) { if (!map.hasLayer(group)) map.addLayer(group); }
+      else { if (map.hasLayer(group)) map.removeLayer(group); }
+    });
+  }, [layers]);
+
   return (
     <div>
       {/* Layer toggles */}
@@ -1440,121 +1605,14 @@ function MapOverlay({ apiMap, emap, route, conflicts, onConflictResolve }) {
           </button>
         ))}
       </div>
-      <div ref={mapRef} style={{ position: "relative", background: T.inputBg, border: `1px solid ${T.border}` }}>
-        {hoveredNode && (
-          <div style={{ position: "absolute", left: hoveredNode.x + 12, top: hoveredNode.y - 28, background: "rgba(13,17,23,0.95)", border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.mono, whiteSpace: "nowrap", pointerEvents: "none", zIndex: 10 }}>{hoveredNode.label}</div>
-        )}
-        {svgUrl && !imgErr ? (
-          <>
-            {!imgLoaded && <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontSize: T.fs4, fontFamily: T.sans }}>Loading map from tarkov.dev...</div>}
-            <img src={svgUrl} alt={apiMap?.name} style={{ width: "100%", display: imgLoaded ? "block" : "none" }}
-              onLoad={() => setImgLoaded(true)} onError={() => setImgErr(true)} />
-            {imgLoaded && (
-              <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}
-                viewBox="0 0 1 1" preserveAspectRatio="none">
-                {/* Location labels from EMAPS loot points */}
-                {(emap?.lootPoints || []).map((lp, i) => lp.pct && (
-                  <g key={`label_${i}`}>
-                    <rect x={lp.pct.x - 0.002} y={lp.pct.y - 0.018} width={lp.name.length * 0.0055 + 0.008} height="0.016" rx="0.003" fill="rgba(20,20,20,0.75)" stroke={T.border} strokeWidth="0.001" />
-                    <text x={lp.pct.x + 0.002} y={lp.pct.y - 0.007} fill={T.textDim} fontSize="0.011" fontFamily={T.mono}>{lp.name}</text>
-                  </g>
-                ))}
-                {/* ── LAYER: Hazard zones ── */}
-                {layers.hazards && hazardPolys.map((h, i) => (
-                  <polygon key={`hz_${i}`} points={h.points.map(p => `${p.x},${p.y}`).join(" ")}
-                    fill={h.type === "minefield" ? "rgba(224,90,90,0.15)" : h.type === "sniper" ? "rgba(208,148,58,0.15)" : "rgba(180,90,224,0.15)"}
-                    stroke={h.type === "minefield" ? "#e05a5a" : h.type === "sniper" ? "#d4943a" : "#b45ae0"}
-                    strokeWidth="0.002" strokeDasharray={h.type === "minefield" ? "0.008,0.004" : "none"} opacity="0.7" />
-                ))}
-                {/* ── LAYER: Stash markers ── */}
-                {layers.stashes && stashMarkers.map((s, i) => (
-                  <g key={`st_${i}`} style={{ pointerEvents: "auto", cursor: "pointer" }}
-                    onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: s.name, x: e.clientX - r.left, y: e.clientY - r.top }); }}
-                    onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
-                    onMouseLeave={() => setHoveredNode(null)}>
-                    <circle cx={s.pct.x} cy={s.pct.y} r="0.008" fill={T.successBg} stroke={T.success} strokeWidth="0.002" />
-                  </g>
-                ))}
-                {/* ── LAYER: Lock markers ── */}
-                {layers.locks && lockMarkers.map((l, i) => (
-                  <g key={`lk_${i}`} style={{ pointerEvents: "auto", cursor: "pointer" }}
-                    onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: `${l.key}${l.needsPower ? " (needs power)" : ""}`, x: e.clientX - r.left, y: e.clientY - r.top }); }}
-                    onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
-                    onMouseLeave={() => setHoveredNode(null)}>
-                    <rect x={l.pct.x - 0.006} y={l.pct.y - 0.006} width="0.012" height="0.012" rx="0.002"
-                      fill={l.needsPower ? T.orangeBg : "#2a2a14"} stroke={l.needsPower ? T.orange : "#d4b84a"} strokeWidth="0.002" />
-                  </g>
-                ))}
-                {/* ── LAYER: BTR stops ── */}
-                {layers.btr && btrMarkers.map((b, i) => (
-                  <g key={`btr_${i}`} style={{ pointerEvents: "auto", cursor: "pointer" }}
-                    onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: `BTR: ${b.name}`, x: e.clientX - r.left, y: e.clientY - r.top }); }}
-                    onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
-                    onMouseLeave={() => setHoveredNode(null)}>
-                    <rect x={b.pct.x - 0.009} y={b.pct.y - 0.009} width="0.018" height="0.018" rx="0.003"
-                      fill={T.blueBg} stroke={T.blue} strokeWidth="0.002" />
-                    <text x={b.pct.x} y={b.pct.y + 0.005} textAnchor="middle" fill={T.blue} fontSize="0.012" fontFamily={T.mono}>B</text>
-                  </g>
-                ))}
-                {/* ── LAYER: Route ── */}
-                {layers.route && objWaypoints.length > 1 && (
-                  <polyline points={objWaypoints.map(w => `${w.pct.x},${w.pct.y}`).join(" ")}
-                    fill="none" stroke={T.gold} strokeWidth="0.005" strokeDasharray="0.018,0.009" opacity="0.85" />
-                )}
-                {/* Spawn to first */}
-                {layers.route && objWaypoints[0] && (
-                  <line x1="0.5" y1="0.5" x2={objWaypoints[0].pct.x} y2={objWaypoints[0].pct.y}
-                    stroke={T.success} strokeWidth="0.004" strokeDasharray="0.015,0.008" opacity="0.7" />
-                )}
-                {/* Last obj to extract */}
-                {layers.route && objWaypoints.length > 0 && extractWaypoints[0] && (
-                  <line
-                    x1={objWaypoints[objWaypoints.length-1].pct.x} y1={objWaypoints[objWaypoints.length-1].pct.y}
-                    x2={extractWaypoints[0].pct.x} y2={extractWaypoints[0].pct.y}
-                    stroke={T.success} strokeWidth="0.005" strokeDasharray="0.02,0.01" opacity="0.8" />
-                )}
-                {/* Spawn marker */}
-                {layers.route && <>
-                  <circle cx="0.5" cy="0.5" r="0.018" fill={T.successBg} stroke={T.success} strokeWidth="0.004" />
-                  <text x="0.5" y="0.507" textAnchor="middle" fill={T.success} fontSize="0.017" fontFamily={T.mono} fontWeight="bold">S</text>
-                </>}
-                {/* Objective waypoints */}
-                {layers.route && objWaypoints.map((w, i) => {
-                  const col = w.players[0]?.color || T.gold;
-                  return (
-                    <g key={w.id} style={{ pointerEvents: "auto", cursor: "pointer" }}
-                      onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: w.locationName, x: e.clientX - r.left, y: e.clientY - r.top }); }}
-                      onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
-                      onMouseLeave={() => setHoveredNode(null)}>
-                      <circle cx={w.pct.x} cy={w.pct.y} r="0.024" fill={T.bg} stroke={col} strokeWidth="0.005" />
-                      <text x={w.pct.x} y={w.pct.y + 0.009} textAnchor="middle" fill={col} fontSize="0.019" fontFamily={T.mono} fontWeight="bold">{i + 1}</text>
-                      {w.players.slice(1, 3).map((p, pi) => (
-                        <circle key={pi} cx={w.pct.x + 0.028 * (pi + 1)} cy={w.pct.y - 0.02}
-                          r="0.012" fill={p.color} stroke={T.bg} strokeWidth="0.003" />
-                      ))}
-                    </g>
-                  );
-                })}
-                {/* Extract waypoints — green, with ⬆ symbol */}
-                {layers.route && extractWaypoints.map((w) => (
-                  <g key={w.id} style={{ pointerEvents: "auto", cursor: "pointer" }}
-                    onMouseEnter={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode({ label: w.locationName, x: e.clientX - r.left, y: e.clientY - r.top }); }}
-                    onMouseMove={e => { const r = mapRef.current?.getBoundingClientRect(); if (r) setHoveredNode(h => h ? { ...h, x: e.clientX - r.left, y: e.clientY - r.top } : h); }}
-                    onMouseLeave={() => setHoveredNode(null)}>
-                    <circle cx={w.pct.x} cy={w.pct.y} r="0.026" fill={T.successBg} stroke={T.success} strokeWidth="0.006" />
-                    <text x={w.pct.x} y={w.pct.y + 0.009} textAnchor="middle" fill={T.success} fontSize="0.018" fontFamily={T.mono} fontWeight="bold">⬆</text>
-                  </g>
-                ))}
-              </svg>
-            )}
-          </>
-        ) : (
-          <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
-            <div style={{ color: T.textDim, fontSize: T.fs4, fontFamily: T.sans }}>{imgErr ? "Map image unavailable" : "Select a map above"}</div>
-            {apiMap && <a href={`https://tarkov.dev/map/${apiMap.normalizedName}`} target="_blank" rel="noreferrer" style={{ color: T.blue, fontSize: T.fs3, fontFamily: T.sans }}>Open on tarkov.dev →</a>}
-          </div>
-        )}
-      </div>
+      {svgUrl ? (
+        <div ref={mapContainerRef} style={{ height: "60vh", minHeight: 350, maxHeight: 600, background: T.inputBg, border: `1px solid ${T.border}` }} />
+      ) : (
+        <div style={{ height: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: T.inputBg, border: `1px solid ${T.border}` }}>
+          <div style={{ color: T.textDim, fontSize: T.fs4, fontFamily: T.sans }}>Select a map above</div>
+          {apiMap && <a href={`https://tarkov.dev/map/${apiMap.normalizedName}`} target="_blank" rel="noreferrer" style={{ color: T.blue, fontSize: T.fs3, fontFamily: T.sans }}>Open on tarkov.dev →</a>}
+        </div>
+      )}
 
       {/* Boss intel panel */}
       {layers.bosses && bossMarkers.length > 0 && (
