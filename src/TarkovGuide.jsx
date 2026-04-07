@@ -2637,6 +2637,7 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
   const [qiSearch, setQiSearch] = useState(""); // quick item search term
   const [qiResults, setQiResults] = useState(null); // quick item search results
   const [targetTrader, setTargetTrader] = useState(null); // targeted trader for map recommendation
+  const [quickOverrides, setQuickOverrides] = useState(null); // manual task picks in quick start: {profileId: [taskId,...]} or null=auto
   const [qiSearching, setQiSearching] = useState(false);
   const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
   const [expandedAnyTask, setExpandedAnyTask] = useState(null);
@@ -3074,12 +3075,34 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
   const quickRec = computeMapRecommendation(allProfiles, filteredApiTasks);
   const quickTopMap = quickRec[0] || null;
   const quickTopApiMap = quickTopMap ? apiMaps?.find(m => m.id === quickTopMap.mapId) : null;
-  const quickTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson) : {};
+  // All incomplete tasks for the recommended map (unlimited) — used for the picker
+  const quickAllTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, 99) : {};
+  // Auto-selected tasks (first N) — used as default before user touches the picker
+  const quickAutoTasks = quickTopMap ? computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson) : {};
+  // Effective selection: manual overrides if set, otherwise auto
+  const quickTasks = quickOverrides || quickAutoTasks;
   const quickTaskCount = Object.values(quickTasks).flat().length;
-  const quickTaskDetails = Object.entries(quickTasks).flatMap(([pid, tids]) => tids.map(tid => {
+  // Flat list of all available tasks with details for the picker UI
+  const quickAllTaskDetails = Object.entries(quickAllTasks).flatMap(([pid, tids]) => tids.map(tid => {
     const at = apiTasks?.find(t => t.id === tid);
-    return at ? { name: at.name, trader: at.trader?.name || "" } : null;
+    return at ? { taskId: tid, profileId: pid, name: at.name, trader: at.trader?.name || "" } : null;
   })).filter(Boolean);
+  const quickSelectedIds = new Set(Object.values(quickTasks).flat());
+
+  const handleQuickTaskToggle = (profileId, taskId) => {
+    const prev = quickOverrides || quickAutoTasks;
+    const profileTasks = prev[profileId] || [];
+    const isSelected = profileTasks.includes(taskId);
+    let next;
+    if (isSelected) {
+      next = { ...prev, [profileId]: profileTasks.filter(id => id !== taskId) };
+    } else {
+      // Check total count across all profiles against tasksPerPerson (per profile)
+      if (profileTasks.length >= tasksPerPerson) return; // at limit for this profile
+      next = { ...prev, [profileId]: [...profileTasks, taskId] };
+    }
+    setQuickOverrides(next);
+  };
 
   const handleQuickGo = () => {
     if (!quickTopMap) return;
@@ -3089,7 +3112,7 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
     const qIds = new Set([myProfile.id]);
     if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
     setActiveIds(qIds);
-    setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson));
+    setPriorityTasks(quickTasks);
     // Auto-select first open PMC extract for each player
     const quickMapNorm = apiMaps?.find(m => m.id === quickTopMap.mapId)?.normalizedName;
     const quickEmap = EMAPS.find(m => m.id === quickMapNorm);
@@ -3112,7 +3135,7 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
       const qIds = new Set([myProfile.id]);
       if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
       setActiveIds(qIds);
-      setPriorityTasks(computeQuickTasks(allProfiles, quickTopMap.mapId, filteredApiTasks, tasksPerPerson));
+      setPriorityTasks(quickTasks);
     }
     setPlannerView("full");
   };
@@ -3126,9 +3149,9 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
         {apiError && <div style={{ fontSize: T.fs3, color: T.error, marginBottom: 6 }}>tarkov.dev unavailable — check connection</div>}
         <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1.5, marginBottom: 4 }}>TARGET TRADER<Tip text="Pick a trader to focus your map recommendation on their tasks. Only maps with incomplete tasks for that trader will be recommended." /></div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
-          <button onClick={() => setTargetTrader(null)} style={{ padding: "4px 10px", fontSize: T.fs2, fontFamily: T.sans, background: !targetTrader ? T.gold + "22" : "transparent", border: `1px solid ${!targetTrader ? T.gold : T.border}`, color: !targetTrader ? T.gold : T.textDim, cursor: "pointer" }}>All</button>
+          <button onClick={() => { setTargetTrader(null); setQuickOverrides(null); }} style={{ padding: "4px 10px", fontSize: T.fs2, fontFamily: T.sans, background: !targetTrader ? T.gold + "22" : "transparent", border: `1px solid ${!targetTrader ? T.gold : T.border}`, color: !targetTrader ? T.gold : T.textDim, cursor: "pointer" }}>All</button>
           {traders.map(tr => (
-            <button key={tr} onClick={() => setTargetTrader(targetTrader === tr ? null : tr)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, background: targetTrader === tr ? T.gold + "22" : "transparent", border: `1px solid ${targetTrader === tr ? T.gold : T.border}`, color: targetTrader === tr ? T.gold : T.textDim, cursor: "pointer" }}>
+            <button key={tr} onClick={() => { setTargetTrader(targetTrader === tr ? null : tr); setQuickOverrides(null); }} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", fontSize: T.fs2, fontFamily: T.sans, background: targetTrader === tr ? T.gold + "22" : "transparent", border: `1px solid ${targetTrader === tr ? T.gold : T.border}`, color: targetTrader === tr ? T.gold : T.textDim, cursor: "pointer" }}>
               {traderImgMap[tr] && <img src={traderImgMap[tr]} alt={tr} style={{ width: 20, height: 20, borderRadius: "50%", objectFit: "cover" }} />}
               <span>{tr}</span>
             </button>
@@ -3136,7 +3159,7 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
-        {quickTopMap && quickTaskCount > 0 ? (
+        {quickTopMap && quickAllTaskDetails.length > 0 ? (
           <div style={{ background: T.surface, border: `2px solid ${T.gold}44`, borderLeft: `2px solid ${T.gold}`, padding: 14, marginBottom: 14 }}>
             <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 8 }}>★ RECOMMENDED MAP{targetTrader ? ` FOR ${targetTrader.toUpperCase()}` : ""}</div>
             <div style={{ fontSize: T.fs6, color: T.gold, fontWeight: "bold", fontFamily: T.sans, letterSpacing: 1, marginBottom: 4 }}>{quickTopMap.mapName}</div>
@@ -3144,20 +3167,26 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
 
             <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
               {[{n:1,label:"QUICK"},{n:2,label:"STANDARD"},{n:3,label:"LONG"}].map(o => (
-                <button key={o.n} onClick={() => setTasksPerPerson(o.n)} style={{ flex: 1, background: tasksPerPerson === o.n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === o.n ? T.gold : T.border}`, color: tasksPerPerson === o.n ? T.gold : T.textDim, padding: "6px 4px", fontSize: T.fs2, fontFamily: T.sans, cursor: "pointer", letterSpacing: 1, textAlign: "center" }}>{o.n} {o.label}</button>
+                <button key={o.n} onClick={() => { setTasksPerPerson(o.n); setQuickOverrides(null); }} style={{ flex: 1, background: tasksPerPerson === o.n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === o.n ? T.gold : T.border}`, color: tasksPerPerson === o.n ? T.gold : T.textDim, padding: "6px 4px", fontSize: T.fs2, fontFamily: T.sans, cursor: "pointer", letterSpacing: 1, textAlign: "center" }}>{o.n} {o.label}</button>
               ))}
             </div>
 
-            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>PRIORITY TASKS:</div>
-            {quickTaskDetails.map((t, i) => (
-              <div key={i} style={{ background: T.gold + "11", border: `1px solid ${T.gold}33`, borderLeft: `2px solid ${T.gold}`, padding: "8px 10px", marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: T.fs3, color: T.textBright }}>★ {t.name}</span>
-                <span style={{ fontSize: T.fs2, color: T.textDim }}>{t.trader}</span>
-              </div>
-            ))}
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>TASKS — TAP TO SELECT ({quickTaskCount}/{tasksPerPerson})<Tip text="Tap tasks to add or remove them from your raid. The number you can select is based on your raid length above." /></div>
+            {quickAllTaskDetails.map((t) => {
+              const isSel = quickSelectedIds.has(t.taskId);
+              const profileTasks = (quickTasks[t.profileId] || []);
+              const atLimit = profileTasks.length >= tasksPerPerson && !isSel;
+              return (
+                <div key={t.profileId + "-" + t.taskId} onClick={() => handleQuickTaskToggle(t.profileId, t.taskId)}
+                  style={{ background: isSel ? T.gold + "11" : "transparent", border: `1px solid ${isSel ? T.gold + "33" : T.border}`, borderLeft: `2px solid ${isSel ? T.gold : T.border}`, padding: "8px 10px", marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: atLimit ? "default" : "pointer", opacity: atLimit ? 0.4 : 1, transition: "all 0.15s ease" }}>
+                  <span style={{ fontSize: T.fs3, color: isSel ? T.textBright : T.textDim }}>{isSel ? "★" : "☆"} {t.name}</span>
+                  <span style={{ fontSize: T.fs2, color: T.textDim }}>{t.trader}</span>
+                </div>
+              );
+            })}
 
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-              <button onClick={handleQuickGo} style={{ flex: 2, background: T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs4, fontFamily: T.sans, fontWeight: "bold", letterSpacing: 1.5, cursor: "pointer" }}>▶ GO</button>
+              <button onClick={handleQuickGo} disabled={quickTaskCount === 0} style={{ flex: 2, background: quickTaskCount === 0 ? T.textDim : T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs4, fontFamily: T.sans, fontWeight: "bold", letterSpacing: 1.5, cursor: quickTaskCount === 0 ? "default" : "pointer", opacity: quickTaskCount === 0 ? 0.4 : 1 }}>▶ GO</button>
               <button onClick={handleCustomize} style={{ flex: 1, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "12px 0", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ CUSTOMIZE</button>
             </div>
           </div>
