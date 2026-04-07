@@ -2641,6 +2641,8 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
   const [qiSearching, setQiSearching] = useState(false);
   const [qiExpanded, setQiExpanded] = useState(null); // expanded item id to show all map choices
   const [expandedAnyTask, setExpandedAnyTask] = useState(null);
+  const [manualPickMapId, setManualPickMapId] = useState(null);
+  const [manualPickOverrides, setManualPickOverrides] = useState(null);
   const qiDebounce = useRef(null);
 
   // Handle pending route task from profile screen
@@ -3085,9 +3087,27 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
   // Flat list of all available tasks with details for the picker UI
   const quickAllTaskDetails = Object.entries(quickAllTasks).flatMap(([pid, tids]) => tids.map(tid => {
     const at = apiTasks?.find(t => t.id === tid);
-    return at ? { taskId: tid, profileId: pid, name: at.name, trader: at.trader?.name || "" } : null;
+    if (!at) return null;
+    const profile = allProfiles.find(p => p.id === pid);
+    const objs = (at.objectives || []).filter(o => !o.optional);
+    return { taskId: tid, profileId: pid, name: at.name, trader: at.trader?.name || "", wikiLink: at.wikiLink, objectives: objs, profile };
   })).filter(Boolean);
   const quickSelectedIds = new Set(Object.values(quickTasks).flat());
+
+  // Manual map pick — computed tasks
+  const manualPickMap = manualPickMapId ? apiMaps?.find(m => m.id === manualPickMapId) : null;
+  const manualPickAllTasks = manualPickMapId ? computeQuickTasks(allProfiles, manualPickMapId, filteredApiTasks, 99) : {};
+  const manualPickAutoTasks = manualPickMapId ? computeQuickTasks(allProfiles, manualPickMapId, filteredApiTasks, tasksPerPerson) : {};
+  const manualPickTasks = manualPickOverrides || manualPickAutoTasks;
+  const manualPickTaskCount = Object.values(manualPickTasks).flat().length;
+  const manualPickAllTaskDetails = Object.entries(manualPickAllTasks).flatMap(([pid, tids]) => tids.map(tid => {
+    const at = apiTasks?.find(t => t.id === tid);
+    if (!at) return null;
+    const profile = allProfiles.find(p => p.id === pid);
+    const objs = (at.objectives || []).filter(o => !o.optional);
+    return { taskId: tid, profileId: pid, name: at.name, trader: at.trader?.name || "", wikiLink: at.wikiLink, objectives: objs, profile };
+  })).filter(Boolean);
+  const manualPickSelectedIds = new Set(Object.values(manualPickTasks).flat());
 
   const handleQuickTaskToggle = (profileId, taskId) => {
     const prev = quickOverrides || quickAutoTasks;
@@ -3140,6 +3160,59 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
     setPlannerView("full");
   };
 
+  const handleManualPickTaskToggle = (profileId, taskId) => {
+    const prev = manualPickOverrides || manualPickAutoTasks;
+    const profileTasks = prev[profileId] || [];
+    const isSelected = profileTasks.includes(taskId);
+    let next;
+    if (isSelected) {
+      next = { ...prev, [profileId]: profileTasks.filter(id => id !== taskId) };
+    } else {
+      if (profileTasks.length >= tasksPerPerson) return;
+      next = { ...prev, [profileId]: [...profileTasks, taskId] };
+    }
+    setManualPickOverrides(next);
+  };
+
+  const handleManualPickGo = () => {
+    if (!manualPickMapId) return;
+    setSelectedMapId(manualPickMapId);
+    setFaction("pmc");
+    setRouteMode("tasks");
+    const qIds = new Set([myProfile.id]);
+    if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+    setActiveIds(qIds);
+    setPriorityTasks(manualPickTasks);
+    const mapNorm = apiMaps?.find(m => m.id === manualPickMapId)?.normalizedName;
+    const mapEmap = EMAPS.find(m => m.id === mapNorm);
+    const openExtract = mapEmap?.pmcExtracts?.find(e => e.type === "open" && e.pct);
+    if (openExtract) {
+      const autoEC = {};
+      qIds.forEach(pid => { autoEC[pid] = { extract: openExtract, missingItems: [] }; });
+      setExtractChoices(autoEC);
+    } else {
+      setExtractChoices({});
+    }
+    setQuickGenPending(true);
+    setManualPickMapId(null);
+    setManualPickOverrides(null);
+  };
+
+  const handleManualPickCustomize = () => {
+    if (manualPickMapId) {
+      setSelectedMapId(manualPickMapId);
+      setFaction("pmc");
+      setRouteMode("tasks");
+      const qIds = new Set([myProfile.id]);
+      if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
+      setActiveIds(qIds);
+      setPriorityTasks(manualPickTasks);
+    }
+    setManualPickMapId(null);
+    setManualPickOverrides(null);
+    setPlannerView("full");
+  };
+
   // ─── Quick Start view ───
   if (plannerView === "quick") return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -3178,9 +3251,27 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
               const atLimit = profileTasks.length >= tasksPerPerson && !isSel;
               return (
                 <div key={t.profileId + "-" + t.taskId} onClick={() => handleQuickTaskToggle(t.profileId, t.taskId)}
-                  style={{ background: isSel ? T.gold + "11" : "transparent", border: `1px solid ${isSel ? T.gold + "33" : T.border}`, borderLeft: `2px solid ${isSel ? T.gold : T.border}`, padding: "8px 10px", marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center", cursor: atLimit ? "default" : "pointer", opacity: atLimit ? 0.4 : 1, transition: "all 0.15s ease" }}>
-                  <span style={{ fontSize: T.fs3, color: isSel ? T.textBright : T.textDim }}>{isSel ? "★" : "☆"} {t.name}</span>
-                  <span style={{ fontSize: T.fs2, color: T.textDim }}>{t.trader}</span>
+                  style={{ background: isSel ? T.gold + "11" : "transparent", border: `1px solid ${isSel ? T.gold + "33" : T.border}`, borderLeft: `2px solid ${isSel ? T.gold : T.border}`, padding: "8px 10px", marginBottom: 4, cursor: atLimit ? "default" : "pointer", opacity: atLimit ? 0.4 : 1, transition: "all 0.15s ease" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: T.fs3, color: isSel ? T.textBright : T.textDim }}>{isSel ? "★" : "☆"} {t.name}</span>
+                    <span style={{ fontSize: T.fs2, color: T.textDim }}>{t.trader}</span>
+                  </div>
+                  {t.objectives && t.objectives.length > 0 && (
+                    <div style={{ marginTop: 4, paddingLeft: 16 }}>
+                      {t.objectives.map(obj => {
+                        const meta = getObjMeta(obj);
+                        const k = `${t.profileId}-${t.taskId}-${obj.id}`;
+                        const progress = ((t.profile?.progress || {})[k] || 0);
+                        const done = progress >= meta.total;
+                        return (
+                          <div key={obj.id} style={{ fontSize: T.fs1, color: done ? T.success : T.textDim, marginTop: 2, display: "flex", alignItems: "flex-start", gap: 4 }}>
+                            <span style={{ color: done ? T.success : meta.color, flexShrink: 0 }}>{done ? "✓" : meta.icon}</span>
+                            <span style={{ textDecoration: done ? "line-through" : "none", opacity: done ? 0.5 : 1 }}>{obj.description || meta.summary}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -3261,22 +3352,70 @@ function RaidTab({ myProfile, saveMyProfile, apiMaps, apiTasks, apiTraders, load
                 const isTop = quickTopMap && quickTopMap.mapId === m.id;
                 return (
                   <button key={m.id} onClick={() => {
-                    setSelectedMapId(m.id);
-                    setFaction("pmc");
-                    setRouteMode("tasks");
-                    const qIds = new Set([myProfile.id]);
-                    if (room.status === "connected") room.roomSquad.forEach(p => qIds.add(p.id));
-                    setActiveIds(qIds);
-                    setPriorityTasks(computeQuickTasks(allProfiles, m.id, filteredApiTasks, tasksPerPerson));
-                    setExtractChoices({});
-                    setQuickGenPending(true);
-                  }} style={{ background: isTop ? T.gold + "15" : T.inputBg, border: `1px solid ${isTop ? T.gold + "66" : T.border}`, color: isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase" }}>
+                    setManualPickMapId(m.id === manualPickMapId ? null : m.id);
+                    setManualPickOverrides(null);
+                  }} style={{ background: m.id === manualPickMapId ? T.gold + "33" : isTop ? T.gold + "15" : T.inputBg, border: `1px solid ${m.id === manualPickMapId ? T.gold : isTop ? T.gold + "66" : T.border}`, color: m.id === manualPickMapId ? T.gold : isTop ? T.gold : T.textDim, padding: "8px 4px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, textAlign: "center", textTransform: "uppercase", fontWeight: m.id === manualPickMapId ? "bold" : "normal" }}>
                     {m.name}
                     {taskCount > 0 && <div style={{ fontSize: T.fs2, color: T.gold, marginTop: 2 }}>{taskCount} task{taskCount !== 1 ? "s" : ""}</div>}
                   </button>
                 );
               })}
             </div>
+            {manualPickMapId && manualPickMap && (
+              <div style={{ background: T.surface, border: `2px solid ${T.gold}44`, borderLeft: `2px solid ${T.gold}`, padding: 14, marginTop: 10 }}>
+                <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 4 }}>★ TASKS ON</div>
+                <div style={{ fontSize: T.fs6, color: T.gold, fontWeight: "bold", fontFamily: T.sans, letterSpacing: 1, marginBottom: 8 }}>{manualPickMap.name}</div>
+                {manualPickAllTaskDetails.length > 0 ? (
+                  <>
+                    <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                      {[{n:1,label:"QUICK"},{n:2,label:"STANDARD"},{n:3,label:"LONG"}].map(o => (
+                        <button key={o.n} onClick={() => { setTasksPerPerson(o.n); setManualPickOverrides(null); }} style={{ flex: 1, background: tasksPerPerson === o.n ? T.gold + "22" : "transparent", border: `1px solid ${tasksPerPerson === o.n ? T.gold : T.border}`, color: tasksPerPerson === o.n ? T.gold : T.textDim, padding: "6px 4px", fontSize: T.fs2, fontFamily: T.sans, cursor: "pointer", letterSpacing: 1, textAlign: "center" }}>{o.n} {o.label}</button>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 1, marginBottom: 6 }}>SELECT TASKS ({manualPickTaskCount}/{tasksPerPerson})<Tip text="Tap tasks to add or remove them from your raid. Each task shows its objectives so you know what to expect. Hit GO to generate the route." /></div>
+                    {manualPickAllTaskDetails.map(t => {
+                      const isSel = manualPickSelectedIds.has(t.taskId);
+                      const profileTasks = (manualPickTasks[t.profileId] || []);
+                      const atLimit = profileTasks.length >= tasksPerPerson && !isSel;
+                      return (
+                        <div key={t.profileId + "-" + t.taskId} onClick={() => handleManualPickTaskToggle(t.profileId, t.taskId)}
+                          style={{ background: isSel ? T.gold + "11" : "transparent", border: `1px solid ${isSel ? T.gold + "33" : T.border}`, borderLeft: `2px solid ${isSel ? T.gold : T.border}`, padding: "8px 10px", marginBottom: 4, cursor: atLimit ? "default" : "pointer", opacity: atLimit ? 0.4 : 1, transition: "all 0.15s ease" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: T.fs3, color: isSel ? T.textBright : T.textDim }}>{isSel ? "★" : "☆"} {t.name}</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              {t.wikiLink && <a href={t.wikiLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ background: T.blue + "22", color: T.blue, border: `1px solid ${T.blue}44`, padding: "1px 5px", fontSize: T.fs1, letterSpacing: 0.5, fontFamily: T.sans, textDecoration: "none" }}>WIKI ↗</a>}
+                              <span style={{ fontSize: T.fs2, color: T.textDim }}>{t.trader}</span>
+                            </div>
+                          </div>
+                          {t.objectives && t.objectives.length > 0 && (
+                            <div style={{ marginTop: 4, paddingLeft: 16 }}>
+                              {t.objectives.map(obj => {
+                                const meta = getObjMeta(obj);
+                                const k = `${t.profileId}-${t.taskId}-${obj.id}`;
+                                const progress = ((t.profile?.progress || {})[k] || 0);
+                                const done = progress >= meta.total;
+                                return (
+                                  <div key={obj.id} style={{ fontSize: T.fs1, color: done ? T.success : T.textDim, marginTop: 2, display: "flex", alignItems: "flex-start", gap: 4 }}>
+                                    <span style={{ color: done ? T.success : meta.color, flexShrink: 0 }}>{done ? "✓" : meta.icon}</span>
+                                    <span style={{ textDecoration: done ? "line-through" : "none", opacity: done ? 0.5 : 1 }}>{obj.description || meta.summary}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                      <button onClick={handleManualPickGo} disabled={manualPickTaskCount === 0} style={{ flex: 2, background: manualPickTaskCount === 0 ? T.textDim : T.gold, color: T.bg, border: "none", padding: "12px 0", fontSize: T.fs4, fontFamily: T.sans, fontWeight: "bold", letterSpacing: 1.5, cursor: manualPickTaskCount === 0 ? "default" : "pointer", opacity: manualPickTaskCount === 0 ? 0.4 : 1 }}>▶ GO</button>
+                      <button onClick={handleManualPickCustomize} style={{ flex: 1, background: "transparent", color: T.textDim, border: `1px solid ${T.border}`, padding: "12px 0", fontSize: T.fs3, fontFamily: T.sans, letterSpacing: 1, cursor: "pointer" }}>✎ CUSTOMIZE</button>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ fontSize: T.fs2, color: T.textDim, padding: "8px 0" }}>No incomplete tasks on this map. Add tasks in the Tasks tab, or try a loot run below.</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
