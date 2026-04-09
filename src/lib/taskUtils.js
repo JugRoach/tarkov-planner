@@ -39,11 +39,16 @@ export function getAvailableTasks(apiTasks, completedIds, failedIds, existingIds
     if (completedIds.has(task.id) || failedIds.has(task.id) || existingIds.has(task.id)) return false;
     // Check player level requirement
     if (playerLevel && task.minPlayerLevel && task.minPlayerLevel > playerLevel) return false;
-    // Check all prerequisites are completed
+    // Check all prerequisites are met
     const reqs = task.taskRequirements || [];
+    if (!reqs.length) return true; // no prereqs = available
     return reqs.every(req => {
-      if (!req.status?.includes("complete")) return true; // non-"complete" status reqs don't block
-      return completedIds.has(req.task?.id);
+      const reqId = req.task?.id;
+      if (!reqId) return true;
+      if (req.status?.includes("complete")) return completedIds.has(reqId);
+      if (req.status?.includes("failed")) return failedIds.has(reqId);
+      if (req.status?.includes("active")) return existingIds.has(reqId) || completedIds.has(reqId);
+      return true;
     });
   });
 }

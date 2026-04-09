@@ -34,7 +34,14 @@ function TarkovGuideInner() {
         const [mData, tData, hData, trData] = await Promise.all([fetchAPI(MAPS_Q), fetchAPI(TASKS_Q), fetchAPI(HIDEOUT_Q), fetchAPI(TRADERS_Q)]);
         const playable = ["customs", "factory", "woods", "interchange", "shoreline", "reserve", "lighthouse", "streets-of-tarkov", "the-lab", "ground-zero"];
         setApiMaps((mData?.maps || []).filter(m => playable.includes(m.normalizedName)));
-        setApiTasks(tData?.tasks || []);
+        // Deduplicate tasks — tarkov.dev API sometimes returns duplicates (e.g. Drip-Out)
+        const seenNames = new Set();
+        setApiTasks((tData?.tasks || []).filter(t => {
+          const key = t.name + '|' + (t.trader?.name || '');
+          if (seenNames.has(key)) return false;
+          seenNames.add(key);
+          return true;
+        }));
         setApiHideout(hData?.hideoutStations || []);
         setApiTraders(trData?.traders || []);
       } catch (e) { setApiError(true); }
