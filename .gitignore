@@ -2,6 +2,14 @@ node_modules
 dist
 .env
 .env.local
-supabase/.temp
 
 .vercel
+
+supabase/.temp
+
+# Claude Code local state
+.claude/
+
+# Tauri build artifacts
+src-tauri/target
+src-tauri/gen/schemas

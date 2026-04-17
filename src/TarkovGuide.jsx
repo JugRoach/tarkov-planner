@@ -6,6 +6,8 @@ import { EMAPS } from "./lib/mapData.js";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import WelcomeBanner from "./components/WelcomeBanner.jsx";
 import BottomNav from "./components/BottomNav.jsx";
+// overlay hook removed for debugging
+const PriceSearch = lazy(() => import('./components/PriceSearch.jsx'));
 const TasksTab = lazy(() => import('./tabs/TasksTab.jsx'));
 const RaidTab = lazy(() => import('./tabs/RaidTab.jsx'));
 const BuildsTab = lazy(() => import('./tabs/BuildsTab.jsx'));
@@ -49,6 +51,8 @@ function TarkovGuideInner() {
     })();
   }, []);
 
+  const [overlayMode, setOverlayMode] = useState(false);
+  const toggleOverlay = () => setOverlayMode(prev => !prev);
   const [pendingRouteTask, setPendingRouteTask] = useState(null);
   const [welcomed, saveWelcomed] = useStorage("tg-welcomed-v7", false);
   const [showWelcome, setShowWelcome] = useState(false);
@@ -115,12 +119,11 @@ function TarkovGuideInner() {
         <div style={{ fontSize: T.fs1, letterSpacing: 3, color: T.textDim, marginBottom: 2 }}>PvE FIELD REFERENCE</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ fontSize: T.fs6, fontWeight: "bold", color: T.gold, letterSpacing: 2.5 }}>TARKOV GUIDE</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button onClick={toggleOverlay} style={{ background: "rgba(210,175,120,0.06)", border: "1px solid rgba(210,175,120,0.15)", color: T.textDim, padding: "3px 7px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, borderRadius: T.r1, letterSpacing: 0.5 }}>OVR</button>
             <button aria-label="Search" onClick={() => { setSearchOpen(true); setSearchQ(""); }} style={{ background: "rgba(210,175,120,0.06)", border: `1px solid rgba(210,175,120,0.15)`, color: T.text, padding: "3px 8px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, borderRadius: T.r1 }}>🔍</button>
-            {myProfile.name && <div style={{ fontSize: T.fs3, color: myProfile.color, fontFamily: T.sans }}>{myProfile.name}</div>}
             <div style={{ fontSize: T.fs1, color: apiError ? T.errorBorder : T.successBorder, display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 5, height: 5, borderRadius: "50%", background: apiError ? T.error : T.success }} />
-              {apiError ? "OFFLINE" : "LIVE DATA"}
             </div>
           </div>
         </div>

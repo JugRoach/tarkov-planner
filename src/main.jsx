@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import TarkovGuide from './TarkovGuide.jsx'
+import DesktopApp from './DesktopApp.jsx'
+import ScannerPopout from './components/ScannerPopout.jsx'
 import { supabase } from './supabase.js'
+
 
 // Generate or retrieve a stable device ID
 function getDeviceId() {
@@ -81,8 +84,29 @@ window.storage = {
   }
 }
 
+// Detect if this is the scanner popout window
+// Try sync check via __TAURI_INTERNALS__, async fallback via API
+function AppRoot() {
+  const [isPopout, setIsPopout] = React.useState(() => {
+    const label = window.__TAURI_INTERNALS__?.metadata?.currentWebview?.label;
+    return label === 'scanner-popout';
+  });
+
+  React.useEffect(() => {
+    if (isPopout) return;
+    (async () => {
+      try {
+        const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+        if (getCurrentWebviewWindow().label === 'scanner-popout') setIsPopout(true);
+      } catch (_) {}
+    })();
+  }, []);
+
+  return isPopout ? <ScannerPopout /> : <DesktopApp />;
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <TarkovGuide />
+    <AppRoot />
   </React.StrictMode>
 )
