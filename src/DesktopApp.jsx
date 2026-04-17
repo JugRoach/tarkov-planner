@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, lazy, Suspense } from "react";
 import { T, PLAYER_COLORS } from "./theme.js";
 import { useStorage } from "./hooks/useStorage.js";
+import { useUpdater } from "./hooks/useUpdater.js";
 import { fetchAPI, MAPS_Q, TASKS_Q, HIDEOUT_Q, TRADERS_Q } from "./api.js";
 import { EMAPS } from "./lib/mapData.js";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
@@ -55,6 +56,7 @@ function DesktopAppInner() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [apiRetry, setApiRetry] = useState(0);
+  const updater = useUpdater({ autoCheck: true });
 
   useEffect(() => {
     if (profileReady && !welcomed) setShowWelcome(true);
@@ -310,6 +312,60 @@ function DesktopAppInner() {
 
       {/* ─── CONTENT AREA ────────────────────────────── */}
       <main style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {updater.status === "available" && updater.info && (
+          <div style={{
+            background: T.cyanBg,
+            borderBottom: `1px solid ${T.cyan}`,
+            color: T.cyan,
+            padding: "6px 12px",
+            fontSize: T.fs1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            flexShrink: 0,
+          }}>
+            <span>
+              <strong>Update available:</strong> v{updater.info.version}
+              <button
+                onClick={() => setTab("profile")}
+                style={{
+                  background: "transparent", border: "none", color: T.cyan,
+                  cursor: "pointer", fontSize: T.fs1, padding: "0 0 0 8px",
+                  textDecoration: "underline", fontFamily: T.sans,
+                }}
+              >
+                View release notes
+              </button>
+            </span>
+            <button
+              onClick={updater.installUpdate}
+              style={{
+                background: T.cyan, border: "none", color: T.bg,
+                padding: "3px 12px", fontSize: T.fs1, fontFamily: T.sans,
+                cursor: "pointer", borderRadius: T.r1, letterSpacing: 0.5,
+                whiteSpace: "nowrap", fontWeight: "bold",
+              }}
+            >
+              INSTALL &amp; RELAUNCH
+            </button>
+          </div>
+        )}
+        {updater.status === "downloading" && (
+          <div style={{
+            background: T.cyanBg,
+            borderBottom: `1px solid ${T.cyan}`,
+            color: T.cyan,
+            padding: "6px 12px",
+            fontSize: T.fs1,
+            flexShrink: 0,
+          }}>
+            Downloading update… {Math.round(updater.progress * 100)}%
+            <div style={{ height: 3, background: T.border, marginTop: 4, borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${updater.progress * 100}%`, background: T.cyan, transition: "width 0.2s" }} />
+            </div>
+          </div>
+        )}
         {apiError && (
           <div style={{
             background: T.errorBg || "rgba(200,80,80,0.08)",

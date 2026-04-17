@@ -2,6 +2,152 @@ import { useState } from "react";
 import { T, PLAYER_COLORS } from '../theme.js';
 import { SL, Tip } from '../components/ui/index.js';
 import { encodeProfile, decodeProfile } from '../lib/shareCodes.js';
+import { useUpdater } from '../hooks/useUpdater.js';
+
+const DESKTOP_RELEASES_URL = "https://github.com/JugRoach/tarkov-squad-guide/releases/latest";
+const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
+
+function DesktopAppSection() {
+  const { isTauri, status, info, error, progress, checkForUpdates, installUpdate } = useUpdater();
+
+  if (!isTauri) {
+    // Web/PWA mode — show download card instead
+    return (
+      <>
+        <SL c={<>DESKTOP APP<Tip text="Native Windows app with in-game hover-to-scan for item prices, always-on-top overlay mode, and global hotkeys. Free — auto-updates." /></>} />
+        <div style={{ background: T.surface, border: `1px solid ${T.goldBorder || T.gold + "44"}`, borderLeft: `2px solid ${T.gold}`, padding: 12, marginBottom: 16 }}>
+          <div style={{ fontSize: T.fs3, color: T.gold, fontWeight: "bold", marginBottom: 6 }}>Get the Windows desktop app</div>
+          <div style={{ fontSize: T.fs2, color: T.text, lineHeight: 1.7, marginBottom: 10 }}>
+            The desktop version adds hover-to-scan item prices, an always-on-top overlay for use while in raid, and global hotkeys. Works alongside Tarkov.
+          </div>
+          <div style={{ fontSize: T.fs1, color: T.textDim, lineHeight: 1.6, marginBottom: 10 }}>
+            ✓ One-click install · ✓ Auto-updates · ✓ Free &amp; open source
+          </div>
+          <a
+            href={DESKTOP_RELEASES_URL}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "block",
+              width: "100%",
+              background: T.gold,
+              color: T.bg,
+              border: "none",
+              padding: "12px 0",
+              fontSize: T.fs3,
+              textAlign: "center",
+              cursor: "pointer",
+              fontFamily: T.sans,
+              letterSpacing: 1,
+              textTransform: "uppercase",
+              fontWeight: "bold",
+              textDecoration: "none",
+              borderRadius: T.r2,
+              boxSizing: "border-box",
+            }}
+          >
+            ⇩ DOWNLOAD FOR WINDOWS
+          </a>
+          <div style={{ fontSize: T.fs1, color: T.textDim, textAlign: "center", marginTop: 6 }}>Opens GitHub — download the .msi or setup.exe</div>
+        </div>
+      </>
+    );
+  }
+
+  // Tauri mode — show version + update UI
+  const busy = status === "checking" || status === "downloading" || status === "installing";
+  return (
+    <>
+      <SL c={<>DESKTOP APP<Tip text="Check for updates, view release notes, and install the latest version. The app also checks automatically on startup." /></>} />
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`, padding: 12, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontSize: T.fs3, color: T.textBright, fontWeight: "bold" }}>Tarkov Guide</div>
+            <div style={{ fontSize: T.fs1, color: T.textDim, marginTop: 2 }}>Version {APP_VERSION}</div>
+          </div>
+          <button
+            onClick={() => checkForUpdates(false)}
+            disabled={busy}
+            style={{
+              background: busy ? T.surface : "rgba(210,175,120,0.06)",
+              border: `1px solid ${T.border}`,
+              color: T.textDim,
+              padding: "6px 12px",
+              fontSize: T.fs1,
+              fontFamily: T.sans,
+              cursor: busy ? "wait" : "pointer",
+              borderRadius: T.r1,
+              letterSpacing: 0.5,
+              whiteSpace: "nowrap",
+              opacity: busy ? 0.6 : 1,
+            }}
+          >
+            {status === "checking" ? "CHECKING…" : "CHECK FOR UPDATES"}
+          </button>
+        </div>
+
+        {status === "uptodate" && (
+          <div style={{ fontSize: T.fs2, color: T.success, padding: "6px 8px", background: T.successBg, border: `1px solid ${T.successBorder}`, borderRadius: T.r1 }}>
+            ✓ You're on the latest version.
+          </div>
+        )}
+
+        {status === "available" && info && (
+          <div style={{ background: T.cyanBg, border: `1px solid ${T.cyanBorder}`, borderRadius: T.r1, padding: 10 }}>
+            <div style={{ fontSize: T.fs2, color: T.cyan, fontWeight: "bold", marginBottom: 4 }}>
+              New version available: {info.version}
+            </div>
+            {info.body && (
+              <div style={{ fontSize: T.fs1, color: T.text, lineHeight: 1.6, marginBottom: 8, maxHeight: 120, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                {info.body}
+              </div>
+            )}
+            <button
+              onClick={installUpdate}
+              style={{
+                width: "100%",
+                background: T.cyan,
+                color: T.bg,
+                border: "none",
+                padding: "10px 0",
+                fontSize: T.fs2,
+                fontFamily: T.sans,
+                cursor: "pointer",
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                fontWeight: "bold",
+                borderRadius: T.r2,
+              }}
+            >
+              ⇩ Download &amp; Install
+            </button>
+          </div>
+        )}
+
+        {status === "downloading" && (
+          <div style={{ padding: "6px 0" }}>
+            <div style={{ fontSize: T.fs1, color: T.cyan, marginBottom: 4 }}>
+              Downloading… {Math.round(progress * 100)}%
+            </div>
+            <div style={{ height: 4, background: T.border, borderRadius: 2, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${progress * 100}%`, background: T.cyan, transition: "width 0.2s" }} />
+            </div>
+          </div>
+        )}
+
+        {status === "installing" && (
+          <div style={{ fontSize: T.fs2, color: T.cyan }}>Installing — the app will relaunch shortly…</div>
+        )}
+
+        {status === "error" && error && (
+          <div style={{ fontSize: T.fs1, color: T.error, padding: "6px 8px", background: T.errorBg, border: `1px solid ${T.errorBorder}`, borderRadius: T.r1 }}>
+            Update failed: {error}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 export default function ProfileTab({ myProfile, saveMyProfile, setTab }) {
   const [copied, setCopied] = useState(false);
@@ -77,6 +223,9 @@ export default function ProfileTab({ myProfile, saveMyProfile, setTab }) {
             </div>
           )}
         </div>
+
+        {/* ── DESKTOP APP (download / update) ── */}
+        <DesktopAppSection />
 
         {/* ── TARKOVTRACKER SYNC GUIDE ── */}
         <SL c={<>SYNC YOUR QUESTS<Tip text="Automatically import your in-game quest progress instead of adding tasks manually. Uses TarkovTracker — a free community tool used by thousands of Tarkov players." /></>} />

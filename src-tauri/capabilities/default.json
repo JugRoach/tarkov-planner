@@ -19,6 +19,9 @@
     "core:window:allow-is-visible",
     "core:window:allow-start-dragging",
     "core:window:allow-set-ignore-cursor-events",
-    "core:event:default"
+    "core:event:default",
+    "updater:default",
+    "dialog:default",
+    "process:default"
   ]
 }
