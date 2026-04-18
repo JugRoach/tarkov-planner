@@ -65,7 +65,7 @@ function isCompatible(item, chosenIds, conflictPool) {
  * sub-slot traversal within the chosen branch maintains its own mutable
  * copies so siblings can see each other's picks.
  */
-function optimizeSubtree(slot, path, mode, chosenIds, conflictPool, skipSlot) {
+function optimizeSubtree(slot, path, mode, chosenIds, conflictPool, skipSlot, isAvailable) {
   if (skipSlot(slot.nameId)) return { score: 0, mods: {}, picked: [] };
   const items = slot?.filters?.allowedItems || [];
   if (items.length === 0) return { score: 0, mods: {}, picked: [] };
@@ -75,6 +75,7 @@ function optimizeSubtree(slot, path, mode, chosenIds, conflictPool, skipSlot) {
     : { score: 0, mods: {}, picked: [] };
 
   for (const item of items) {
+    if (isAvailable && !isAvailable(item)) continue;
     if (!isCompatible(item, chosenIds, conflictPool)) continue;
 
     // Start a local snapshot for this candidate's sub-tree so siblings
@@ -92,7 +93,7 @@ function optimizeSubtree(slot, path, mode, chosenIds, conflictPool, skipSlot) {
     const subSlots = item.properties?.slots || [];
     for (const sub of subSlots) {
       const subPath = `${path}.${sub.nameId}`;
-      const subBest = optimizeSubtree(sub, subPath, mode, localChosen, localConflicts, skipSlot);
+      const subBest = optimizeSubtree(sub, subPath, mode, localChosen, localConflicts, skipSlot, isAvailable);
       subScore += subBest.score;
       Object.assign(subMods, subBest.mods);
       for (const m of subBest.picked) {
@@ -125,7 +126,7 @@ function optimizeSubtree(slot, path, mode, chosenIds, conflictPool, skipSlot) {
  * forced to skip any mod that conflicts with the launcher.
  */
 export function optimizeBuild(weapon, mode, options = {}) {
-  const { currentMods = {}, skipSlot = defaultSkipSlot } = options;
+  const { currentMods = {}, skipSlot = defaultSkipSlot, isAvailable = null } = options;
   const slots = weapon?.properties?.slots || [];
 
   // Pre-compute each slot's best unconstrained score (skipped slots are
@@ -135,7 +136,7 @@ export function optimizeBuild(weapon, mode, options = {}) {
     .filter((slot) => !skipSlot(slot.nameId))
     .map((slot) => ({
       slot,
-      maxScore: optimizeSubtree(slot, slot.nameId, mode, EMPTY, EMPTY, skipSlot).score,
+      maxScore: optimizeSubtree(slot, slot.nameId, mode, EMPTY, EMPTY, skipSlot, isAvailable).score,
     }));
   ranked.sort((a, b) => b.maxScore - a.maxScore);
 
@@ -144,7 +145,7 @@ export function optimizeBuild(weapon, mode, options = {}) {
   const conflictPool = new Set();
 
   for (const { slot } of ranked) {
-    const { mods, picked } = optimizeSubtree(slot, slot.nameId, mode, chosenIds, conflictPool, skipSlot);
+    const { mods, picked } = optimizeSubtree(slot, slot.nameId, mode, chosenIds, conflictPool, skipSlot, isAvailable);
     Object.assign(result, mods);
     for (const m of picked) {
       chosenIds.add(m.id);

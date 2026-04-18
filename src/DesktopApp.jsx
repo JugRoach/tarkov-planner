@@ -38,7 +38,7 @@ function DesktopAppInner() {
   const [overlayMode, setOverlayMode] = useState(false);
   const [myProfile, saveMyProfile, profileReady] = useStorage(
     "tg-myprofile-v3",
-    { id: "me_" + Math.random().toString(36).slice(2, 10), name: "", color: PLAYER_COLORS[0], tasks: [], progress: {} }
+    { id: "me_" + Math.random().toString(36).slice(2, 10), name: "", color: PLAYER_COLORS[0], tasks: [], progress: {}, pmcLevel: 1, traderLevels: {} }
   );
   const [apiMaps, setApiMaps] = useState(null);
   const [apiTasks, setApiTasks] = useState(null);
@@ -457,7 +457,7 @@ function DesktopAppInner() {
               />
             )}
             {tab === "prices" && <PriceSearch />}
-            {tab === "builds" && <BuildsTab savedBuilds={savedBuilds} saveSavedBuilds={saveSavedBuilds} />}
+            {tab === "builds" && <BuildsTab savedBuilds={savedBuilds} saveSavedBuilds={saveSavedBuilds} myProfile={myProfile} />}
             {tab === "intel" && <IntelTab />}
             {tab === "profile" && <ProfileTab myProfile={myProfile} saveMyProfile={saveMyProfile} setTab={setTab} />}
           </div>

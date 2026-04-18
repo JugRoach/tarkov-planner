@@ -5,6 +5,7 @@ import { fetchAPI, WEAPONS_LIST_Q, weaponDetailQ } from '../api.js';
 import { encodeBuild, decodeBuild } from '../lib/shareCodes.js';
 import { optimizeBuild } from '../lib/buildOptimizer.js';
 import { calcStats, getCheapestPrice } from '../lib/buildStats.js';
+import { isAvailableForProfile } from '../lib/availability.js';
 
 // Turn tarkov.dev caliber strings into readable labels:
 //   "Caliber556x45NATO" → "5.56x45 NATO"
@@ -50,7 +51,7 @@ function ModStats({ mod }) {
   );
 }
 
-export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
+export default function BuildsTab({ savedBuilds, saveSavedBuilds, myProfile }) {
   const [weapons, setWeapons] = useState(null);
   const [weaponsLoading, setWeaponsLoading] = useState(false);
   const [screen, setScreen] = useState("list"); // "list" | "pick" | "edit" | "leaderboard"
@@ -58,6 +59,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
   const [leaderboardMode, setLeaderboardMode] = useState("recoil-balanced"); // "ergo" | "recoil" | "recoil-balanced"
   const [leaderboardRows, setLeaderboardRows] = useState(null); // null while loading
   const [leaderboardProgress, setLeaderboardProgress] = useState({ loaded: 0, total: 0 });
+  const [leaderboardAvailableOnly, setLeaderboardAvailableOnly] = useState(false);
   const weaponDetailCache = useRef({}); // { [weaponId]: { [gameMode]: detail } }
   const [selectedWeapon, setSelectedWeapon] = useState(null); // full weapon detail data
   const [weaponLoading, setWeaponLoading] = useState(false);
@@ -138,6 +140,10 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
       }
     };
 
+    const availPredicate = leaderboardAvailableOnly
+      ? (item) => isAvailableForProfile(item, myProfile)
+      : null;
+
     (async () => {
       let loaded = 0;
       const results = await Promise.all(filtered.map(async (w) => {
@@ -145,7 +151,9 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
         loaded += 1;
         if (!cancelled) setLeaderboardProgress({ loaded, total: filtered.length });
         if (!detail) return null;
-        const mods = optimizeBuild(detail, leaderboardMode);
+        // When the availability filter is on, drop weapons the user can't even buy.
+        if (availPredicate && !availPredicate(detail)) return null;
+        const mods = optimizeBuild(detail, leaderboardMode, { isAvailable: availPredicate });
         const stats = calcStats(detail, mods);
         return { weapon: detail, mods, stats };
       }));
@@ -154,7 +162,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
     })();
 
     return () => { cancelled = true; };
-  }, [screen, leaderboardCaliber, leaderboardMode, gameMode, weapons]);
+  }, [screen, leaderboardCaliber, leaderboardMode, gameMode, weapons, leaderboardAvailableOnly, myProfile]);
 
   // Load full weapon detail when picking a weapon
   const selectWeapon = async (weaponId) => {
@@ -581,7 +589,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
             ))}
           </div>
           <div style={{ fontSize: T.fs1, color: T.textDim, letterSpacing: 0.8, marginBottom: 4 }}>OPTIMIZE FOR</div>
-          <div style={{ display: "flex", gap: 4 }}>
+          <div style={{ display: "flex", gap: 4, marginBottom: 8 }}>
             {["ergo", "recoil", "recoil-balanced"].map((m) => (
               <button
                 key={m}
@@ -603,6 +611,23 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setLeaderboardAvailableOnly((v) => !v)}
+            style={{
+              width: "100%",
+              background: leaderboardAvailableOnly ? T.success + "22" : "transparent",
+              border: `1px solid ${leaderboardAvailableOnly ? T.success : T.border}`,
+              color: leaderboardAvailableOnly ? T.success : T.textDim,
+              padding: "6px 0",
+              fontSize: T.fs1,
+              cursor: "pointer",
+              fontFamily: T.sans,
+              letterSpacing: 0.8,
+              fontWeight: leaderboardAvailableOnly ? "bold" : "normal",
+            }}
+          >
+            {leaderboardAvailableOnly ? "✓ ONLY BUILDS I CAN MAKE" : "SHOW ONLY BUILDS I CAN MAKE"}
+          </button>
         </div>
         <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
           {weaponsLoading && <div style={{ color: T.textDim, fontSize: T.fs3, textAlign: "center", padding: 20 }}>Loading weapons from tarkov.dev...</div>}

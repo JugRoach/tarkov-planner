@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, PLAYER_COLORS } from '../theme.js';
 import { SL, Tip } from '../components/ui/index.js';
 import { encodeProfile, decodeProfile } from '../lib/shareCodes.js';
+import { TRADERS, FLEA_UNLOCK_LEVEL } from '../lib/availability.js';
 import { useUpdater } from '../hooks/useUpdater.js';
 
 const DESKTOP_RELEASES_URL = "https://github.com/JugRoach/tarkov-squad-guide/releases/latest";
@@ -196,6 +197,60 @@ export default function ProfileTab({ myProfile, saveMyProfile, setTab }) {
             )}
           </div>
         )}
+
+        {/* ── PROGRESSION ── */}
+        <SL c={<>PROGRESSION<Tip text={`Your PMC level and trader loyalty levels. Used by the Builds tab's "only show builds I can actually make" filter so the leaderboard stops suggesting mods you can't buy. Flea Market unlocks at PMC level ${FLEA_UNLOCK_LEVEL}.`} /></>} />
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`, padding: 12, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 0.8, flexShrink: 0, minWidth: 90 }}>PMC LEVEL</div>
+            <input
+              type="number"
+              min={1}
+              max={79}
+              value={myProfile.pmcLevel ?? 1}
+              onChange={(e) => {
+                const n = Math.max(1, Math.min(79, parseInt(e.target.value, 10) || 1));
+                saveMyProfile({ ...myProfile, pmcLevel: n });
+              }}
+              style={{ background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 10px", fontSize: T.fs3, fontFamily: T.sans, outline: "none", width: 80, textAlign: "center" }}
+            />
+            <div style={{ fontSize: T.fs1, color: (myProfile.pmcLevel ?? 1) >= FLEA_UNLOCK_LEVEL ? T.success : T.textDim, flex: 1 }}>
+              {(myProfile.pmcLevel ?? 1) >= FLEA_UNLOCK_LEVEL ? "Flea Market unlocked" : `Flea Market at ${FLEA_UNLOCK_LEVEL}`}
+            </div>
+          </div>
+          <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 4 }}>
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 0.8, marginBottom: 8 }}>TRADER LEVELS</div>
+            {TRADERS.map((trader) => {
+              const level = myProfile.traderLevels?.[trader] || 0;
+              return (
+                <div key={trader} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <div style={{ flex: 1, fontSize: T.fs2, color: T.textBright }}>{trader}</div>
+                  {[0, 1, 2, 3, 4].map((l) => (
+                    <button
+                      key={l}
+                      onClick={() => saveMyProfile({
+                        ...myProfile,
+                        traderLevels: { ...(myProfile.traderLevels || {}), [trader]: l },
+                      })}
+                      style={{
+                        width: 28, height: 24,
+                        background: level === l ? T.gold + "22" : "transparent",
+                        border: `1px solid ${level === l ? T.gold : T.border}`,
+                        color: level === l ? T.gold : T.textDim,
+                        fontSize: T.fs1, fontFamily: T.sans,
+                        cursor: "pointer",
+                        fontWeight: level === l ? "bold" : "normal",
+                      }}
+                      aria-label={`${trader} LL ${l}`}
+                    >
+                      {l === 0 ? "—" : l}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
         {/* ── SHARE CODE ── */}
         <SL c={<>YOUR SHARE CODE<Tip text="Copy this code and paste it in Discord before each raid. Your squadmates paste it in the Raid tab to import your profile and tasks." /></>} />
