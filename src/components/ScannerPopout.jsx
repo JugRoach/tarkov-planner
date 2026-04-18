@@ -169,7 +169,10 @@ export default function ScannerPopout() {
               )}
             </div>
 
-            {/* Secondary: flea + best sell, one line each, tight */}
+            {/* Always show BOTH flea and best-trader values side by side so
+                the player can see the full picture, even when one source is
+                clearly the winner — the Per/slot number above already flags
+                which one drives the pickup decision. */}
             <div style={{ display: "flex", gap: 8, fontSize: T.fs1, marginTop: 3 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ color: T.textDim }}>Flea </span>
@@ -180,12 +183,14 @@ export default function ScannerPopout() {
                   </span>
                 )}
               </div>
-              {bestSell && (
-                <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
-                  <span style={{ color: T.gold }}>{formatPrice(bestSell.priceRUB)}</span>
-                  <span style={{ color: T.textDim }}> \u2192 {bestSell.vendor?.name}</span>
-                </div>
-              )}
+              <div style={{ flex: 1, minWidth: 0, textAlign: "right" }}>
+                <span style={{ color: T.textDim }}>
+                  {bestSell?.vendor?.name || "Trader"}{" "}
+                </span>
+                <span style={{ color: bestSell ? T.textBright : T.textDim }}>
+                  {bestSell ? formatPrice(bestSell.priceRUB) : "\u2014"}
+                </span>
+              </div>
             </div>
           </div>
         ) : (
