@@ -83,27 +83,39 @@ export function useScanAndFetch({ autoStart = false, onPrice } = {}) {
       const lines = await tauriInvokeRef.current("scan_at_cursor");
       if (!lines || lines.length === 0) return;
 
-      const raw = lines.join(" ").trim();
-      const cleaned = cleanOcr(raw);
-      if (cleaned === lastScanRef.current || cleaned.length < 2) return;
-      lastScanRef.current = cleaned;
+      // Debug sentinels — show diagnostic in status line instead of matching
+      const first = lines[0] || "";
+      if (first.startsWith("__")) {
+        if (!mountedRef.current) return;
+        const label = first === "__NO_OCR__" ? "No text read at cursor" : first;
+        setScanStatus(label);
+        return;
+      }
 
-      let bestMatch = findBestMatch(cleaned, index);
-      if (!bestMatch) {
-        const words = cleaned.split(/\s+/).filter((w) => w.length >= 2);
-        words.sort((a, b) => b.length - a.length);
-        for (const word of words) {
-          const match = findBestMatch(word, index);
-          if (match && (!bestMatch || match.score > bestMatch.score)) {
-            bestMatch = match;
-          }
+      // Lines come back sorted by cursor-proximity (closest first). Try each
+      // in order and keep the highest-scoring match — strict > means a tie
+      // goes to whichever candidate was tried first (i.e., closest to cursor).
+      const cleanedCandidates = lines
+        .map((l) => cleanOcr(l))
+        .filter((c) => c.length >= 2);
+      if (cleanedCandidates.length === 0) return;
+
+      const primary = cleanedCandidates[0];
+      if (primary === lastScanRef.current) return;
+      lastScanRef.current = primary;
+
+      let bestMatch = null;
+      for (const cand of cleanedCandidates) {
+        const match = findBestMatch(cand, index);
+        if (match && (!bestMatch || match.score > bestMatch.score)) {
+          bestMatch = match;
         }
       }
 
       if (!mountedRef.current) return;
       if (bestMatch) {
         const { item: matched, score } = bestMatch;
-        setScanStatus(`"${cleaned}" \u2192 ${matched.shortName} (${Math.round(score * 100)}%)`);
+        setScanStatus(`"${primary}" \u2192 ${matched.shortName} (${Math.round(score * 100)}%)`);
         const priced = await fetchGql(ITEM_PRICE_Q(matched.id));
         if (!mountedRef.current) return;
         if (priced?.item) {
@@ -111,7 +123,7 @@ export function useScanAndFetch({ autoStart = false, onPrice } = {}) {
           onPriceRef.current?.(priced.item, matched);
         }
       } else {
-        setScanStatus(`No match: "${cleaned}"`);
+        setScanStatus(`No match: "${primary}"`);
       }
     } catch (_) {}
   }, []);
@@ -128,7 +140,7 @@ export function useScanAndFetch({ autoStart = false, onPrice } = {}) {
       if (next) {
         lastScanRef.current = "";
         runScanRef.current?.();
-        scanIntervalRef.current = setInterval(() => runScanRef.current?.(), 750);
+        scanIntervalRef.current = setInterval(() => runScanRef.current?.(), 250);
       } else {
         setScanStatus(null);
       }

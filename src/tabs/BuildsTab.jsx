@@ -3,6 +3,34 @@ import { T } from '../theme.js';
 import { SL, Badge, Btn, Tip } from '../components/ui/index.js';
 import { fetchAPI, WEAPONS_LIST_Q, weaponDetailQ } from '../api.js';
 import { encodeBuild, decodeBuild } from '../lib/shareCodes.js';
+import { optimizeBuild } from '../lib/buildOptimizer.js';
+
+// Compact per-mod stat badges — green for helpful, red for costly, cyan/orange
+// for neutral stats like capacity / malfunction / zoom. Shared by the mod picker
+// overlay and the tree view so each slot shows what its installed mod actually
+// contributes to the build.
+function ModStats({ mod }) {
+  if (!mod) return null;
+  const mp = mod.properties;
+  const ergo = mp?.ergonomics || 0;
+  const recoil = mp?.recoilModifier || 0;
+  const acc = mp?.accuracyModifier || 0;
+  return (
+    <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+      {ergo !== 0 && <span style={{ fontSize: T.fs1, color: ergo > 0 ? T.success : T.error }}>{ergo > 0 ? "+" : ""}{ergo} ergo</span>}
+      {recoil !== 0 && <span style={{ fontSize: T.fs1, color: recoil < 0 ? T.success : T.error }}>{recoil > 0 ? "+" : ""}{Math.round(recoil * 100)}% recoil</span>}
+      {acc !== 0 && <span style={{ fontSize: T.fs1, color: acc < 0 ? T.success : T.error }}>{acc > 0 ? "+" : ""}{Math.round(acc * 100)}% acc</span>}
+      {mp?.capacity && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.capacity} rnd</span>}
+      {mp?.malfunctionChance != null && mp.malfunctionChance > 0 && <span style={{ fontSize: T.fs1, color: T.orange }}>{Math.round(mp.malfunctionChance * 100)}% malf</span>}
+      {mp?.loadModifier != null && mp.loadModifier !== 0 && <span style={{ fontSize: T.fs1, color: mp.loadModifier < 0 ? T.success : T.error }}>{mp.loadModifier > 0 ? "+" : ""}{Math.round(mp.loadModifier * 100)}% load</span>}
+      {mod.loudness != null && mod.loudness !== 0 && <span style={{ fontSize: T.fs1, color: mod.loudness < 0 ? T.success : T.error }}>{mod.loudness > 0 ? "+" : ""}{mod.loudness} loud</span>}
+      {mod.velocity != null && mod.velocity !== 0 && <span style={{ fontSize: T.fs1, color: mod.velocity > 0 ? T.success : T.error }}>{mod.velocity > 0 ? "+" : ""}{Math.round(mod.velocity)} vel</span>}
+      {mp?.zoomLevels?.length > 0 && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.zoomLevels.join("/")}x</span>}
+      {mp?.sightingRange > 0 && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.sightingRange}m</span>}
+      {mp?.deviationMax > 0 && <span style={{ fontSize: T.fs1, color: T.orange }}>{mp.deviationMax} dev</span>}
+    </div>
+  );
+}
 
 export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
   const [weapons, setWeapons] = useState(null);
@@ -248,11 +276,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
             <button onClick={() => { const next = { ...mods }; delete next[path]; setMods(next); setPickerSlot(null); }} style={{ width: "100%", background: T.errorBg, border: `1px solid ${T.errorBorder}`, color: T.error, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, marginBottom: 10 }}>✕ CLEAR SLOT</button>
           )}
           {sortedItems.map(item => {
-            const mp = item.properties;
             const isSelected = currentModId === item.id;
-            const ergo = mp?.ergonomics || 0;
-            const recoil = mp?.recoilModifier || 0;
-            const acc = mp?.accuracyModifier || 0;
             const cheapest = getCheapestPrice(item);
             return (
               <button key={item.id} onClick={() => { setMods({ ...mods, [path]: item.id }); setPickerSlot(null); }}
@@ -264,19 +288,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
                     {cheapest && <span style={{ fontSize: T.fs1, color: T.gold, whiteSpace: "nowrap", flexShrink: 0 }}>{fmtPrice(cheapest.priceRUB)}</span>}
                   </div>
                   {cheapest?.vendor && <div style={{ fontSize: T.fs1, color: T.textDim, marginTop: 1 }}>{cheapest.vendor.name}{cheapest.vendor.minTraderLevel ? " LL" + cheapest.vendor.minTraderLevel : ""}</div>}
-                  <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-                    {ergo !== 0 && <span style={{ fontSize: T.fs1, color: ergo > 0 ? T.success : T.error }}>{ergo > 0 ? "+" : ""}{ergo} ergo</span>}
-                    {recoil !== 0 && <span style={{ fontSize: T.fs1, color: recoil < 0 ? T.success : T.error }}>{recoil > 0 ? "+" : ""}{Math.round(recoil * 100)}% recoil</span>}
-                    {acc !== 0 && <span style={{ fontSize: T.fs1, color: acc < 0 ? T.success : T.error }}>{acc > 0 ? "+" : ""}{Math.round(acc * 100)}% acc</span>}
-                    {mp?.capacity && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.capacity} rnd</span>}
-                    {mp?.malfunctionChance != null && mp.malfunctionChance > 0 && <span style={{ fontSize: T.fs1, color: T.orange }}>{Math.round(mp.malfunctionChance * 100)}% malf</span>}
-                    {mp?.loadModifier != null && mp.loadModifier !== 0 && <span style={{ fontSize: T.fs1, color: mp.loadModifier < 0 ? T.success : T.error }}>{mp.loadModifier > 0 ? "+" : ""}{Math.round(mp.loadModifier * 100)}% load</span>}
-                    {item.loudness != null && item.loudness !== 0 && <span style={{ fontSize: T.fs1, color: item.loudness < 0 ? T.success : T.error }}>{item.loudness > 0 ? "+" : ""}{item.loudness} loud</span>}
-                    {item.velocity != null && item.velocity !== 0 && <span style={{ fontSize: T.fs1, color: item.velocity > 0 ? T.success : T.error }}>{item.velocity > 0 ? "+" : ""}{Math.round(item.velocity)} vel</span>}
-                    {mp?.zoomLevels?.length > 0 && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.zoomLevels.join("/")}x</span>}
-                    {mp?.sightingRange > 0 && <span style={{ fontSize: T.fs1, color: T.cyan }}>{mp.sightingRange}m</span>}
-                    {mp?.deviationMax > 0 && <span style={{ fontSize: T.fs1, color: T.orange }}>{mp.deviationMax} dev</span>}
-                  </div>
+                  <ModStats mod={item} />
                 </div>
               </button>
             );
@@ -391,7 +403,10 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: T.fs1, color: mod ? T.textDim : (slot.required ? T.gold : T.textDim), letterSpacing: 0.8, marginBottom: 2 }}>{slot.name.toUpperCase()}{slot.required ? " *" : ""}</div>
               {mod ? (
-                <div style={{ fontSize: T.fs2, color: T.textBright, fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mod.shortName || mod.name}</div>
+                <>
+                  <div style={{ fontSize: T.fs2, color: T.textBright, fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mod.shortName || mod.name}</div>
+                  <ModStats mod={mod} />
+                </>
               ) : (
                 <div style={{ fontSize: T.fs2, color: T.textDim, fontStyle: "italic" }}>{hasOptions ? "Tap to add" : "No options"}</div>
               )}
@@ -410,9 +425,13 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         {/* Thin header bar */}
-        <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button onClick={() => { setScreen("list"); setSelectedWeapon(null); setEditingBuild(null); }} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, padding: 0 }}>← BACK</button>
-          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "8px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+          <button onClick={() => { setScreen("list"); setSelectedWeapon(null); setEditingBuild(null); }} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, padding: 0, flexShrink: 0 }}>← BACK</button>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <Tip text="Auto-fill options — overwrites current mod selections except scopes, sights, and magazines (those are left alone so your personal picks survive). OPT ERGO: maximize ergonomics. OPT RECOIL: minimize recoil at any cost. OPT BAL: heavy recoil focus but a mod's recoil gain must outweigh its ergo and accuracy penalties. All three respect conflicting-items restrictions." />
+            <button onClick={() => setMods(optimizeBuild(selectedWeapon, "ergo", { currentMods: mods }))} style={{ background: T.cyan + "22", border: `1px solid ${T.cyan}66`, color: T.cyan, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>OPT ERGO</button>
+            <button onClick={() => setMods(optimizeBuild(selectedWeapon, "recoil", { currentMods: mods }))} style={{ background: T.orange + "22", border: `1px solid ${T.orange}66`, color: T.orange, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>OPT RECOIL</button>
+            <button onClick={() => setMods(optimizeBuild(selectedWeapon, "recoil-balanced", { currentMods: mods }))} style={{ background: T.gold + "22", border: `1px solid ${T.gold}66`, color: T.gold, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>OPT BAL</button>
             <button onClick={() => { const next = gameMode === "pve" ? "regular" : "pve"; setGameMode(next); }} style={{ background: gameMode === "pve" ? T.cyan + "22" : T.orange + "22", border: `1px solid ${gameMode === "pve" ? T.cyan + "44" : T.orange + "44"}`, color: gameMode === "pve" ? T.cyan : T.orange, padding: "4px 8px", fontSize: T.fs1, cursor: "pointer", fontFamily: T.sans, letterSpacing: 0.5 }}>{gameMode === "pve" ? "PVE" : "PVP"}</button>
             <button onClick={saveBuild} style={{ background: T.successBg, border: `1px solid ${T.successBorder}`, color: T.success, padding: "6px 12px", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1 }}>SAVE</button>
           </div>

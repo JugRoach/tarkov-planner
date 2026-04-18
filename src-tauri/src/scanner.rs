@@ -1,40 +1,57 @@
 use screenshots::Screen;
+use std::fs::File;
+use std::io::Write;
+use std::path::PathBuf;
 use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
 use windows::Media::Ocr::OcrEngine;
 
-#[derive(Clone, Debug)]
-struct Word {
-    text: String,
-    left: f64,
-    top: f64,
-    right: f64,
-    bottom: f64,
+/// Dump an RGBA buffer as a PPM (P6) so we can inspect what the scanner
+/// sees without adding an image-encoding dependency. Only runs in debug
+/// builds (cargo check / tauri dev). Files land in %TEMP%.
+fn debug_dump_rgba(name: &str, rgba: &[u8], width: u32, height: u32) {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+    let Some(tmp) = std::env::var_os("TEMP").map(PathBuf::from) else {
+        return;
+    };
+    let path = tmp.join(format!("tarkov-scan-{name}.ppm"));
+    let Ok(mut f) = File::create(&path) else { return };
+    let header = format!("P6\n{width} {height}\n255\n");
+    if f.write_all(header.as_bytes()).is_err() {
+        return;
+    }
+    // RGBA -> RGB
+    let mut rgb = Vec::with_capacity((width * height * 3) as usize);
+    for px in rgba.chunks_exact(4) {
+        rgb.push(px[0]);
+        rgb.push(px[1]);
+        rgb.push(px[2]);
+    }
+    let _ = f.write_all(&rgb);
 }
 
 #[derive(Clone, Debug)]
-struct Line {
+struct PositionedWord {
     text: String,
-    left: f64,
-    top: f64,
-    right: f64,
-    bottom: f64,
     cx: f64,
     cy: f64,
 }
 
-/// Capture a region around the cursor, OCR all text, and return candidate
-/// item names — the tooltip title if one is detected, otherwise the line
-/// closest to the cursor.
+/// Capture a focused region around the cursor biased upward (the shortName
+/// label lives at the top of Tarkov inventory tiles), OCR it, and return
+/// candidate words sorted by distance from cursor with a strong preference
+/// for words ABOVE cursor (the label is at the top of the tile). This
+/// disambiguates adjacent tiles — e.g., Hawk vs Eagle gunpowder side by
+/// side: both labels get OCR'd, but only Hawk's is directly above cursor.
 #[tauri::command]
 pub fn scan_at_cursor() -> Result<Vec<String>, String> {
     let (cx, cy) = get_cursor_pos().map_err(|e| format!("Failed to get cursor pos: {e}"))?;
 
-    // Capture wide enough to include the tooltip, which Tarkov draws to the
-    // right (or left if near edge) of the hovered item and can be ~250px wide.
-    let region_w: u32 = 400;
-    let region_h: u32 = 300;
-    let x = (cx as i32 - region_w as i32 / 2).max(0);
-    let y = (cy as i32 - region_h as i32 / 2).max(0);
+    let region_w: u32 = 220;
+    let region_h: u32 = 130;
+    let rx = (cx as i32 - region_w as i32 / 2).max(0);
+    let ry = (cy as i32 - (region_h as i32 * 3 / 4)).max(0);
 
     let screens = Screen::all().map_err(|e| format!("Failed to enumerate screens: {e}"))?;
     let screen = screens
@@ -49,187 +66,81 @@ pub fn scan_at_cursor() -> Result<Vec<String>, String> {
         .ok_or_else(|| "Cursor not on any screen".to_string())?;
 
     let capture = screen
-        .capture_area(x, y, region_w, region_h)
+        .capture_area(rx, ry, region_w, region_h)
         .map_err(|e| format!("Screen capture failed: {e}"))?;
 
     let (width, height) = capture.dimensions();
     let rgba = capture.into_raw();
+    debug_dump_rgba("capture", &rgba, width, height);
 
-    let (processed, pw, ph) = preprocess(&rgba, width, height);
+    const SCALE: u32 = 4;
+    let (processed, pw, ph) = preprocess(&rgba, width, height, SCALE);
+    debug_dump_rgba("processed", &processed, pw, ph);
 
-    let cursor_local_x = (cx as i32 - x) as f64 * (pw as f64 / width as f64);
-    let cursor_local_y = (cy as i32 - y) as f64 * (ph as f64 / height as f64);
-
-    let words = ocr_with_positions(&processed, pw, ph)
+    let words = ocr_words_positioned(&processed, pw, ph)
         .map_err(|e| format!("OCR failed: {e}"))?;
 
-    let lines = group_into_lines(&words);
-
-    let mut result_lines: Vec<String> = Vec::new();
-
-    // If we can find a tooltip (a stack of ≥3 left-aligned lines), its top
-    // line is the item name — much more reliable than cursor proximity.
-    if let Some(title) = detect_tooltip_title(&lines) {
-        // Trust the tooltip title — do NOT emit individual words. A single
-        // token like "Striker" would fuzzy-match "Lucky Strike Cigarettes"
-        // and beat the correct multi-token match.
-        result_lines.push(title);
-        return Ok(result_lines);
+    if words.is_empty() {
+        return Ok(vec!["__NO_OCR__".to_string()]);
     }
 
-    // Fallback: score lines by proximity to cursor, preferring text above
-    let mut scored: Vec<(String, f64)> = lines
-        .iter()
-        .map(|l| {
-            let dx = (l.cx - cursor_local_x).abs();
-            let dy = l.cy - cursor_local_y;
-            let score = if dy < 20.0 {
-                dx + dy.abs() * 0.3
+    // Cursor position in the processed (upscaled) coordinate space
+    let cursor_px = (cx as i32 - rx) as f64 * SCALE as f64;
+    let cursor_py = (cy as i32 - ry) as f64 * SCALE as f64;
+
+    // Score each word by distance from cursor. Words below the cursor get
+    // a large penalty — the shortName label sits ABOVE the cursor when
+    // hovering a tile, so anything below is almost certainly a different
+    // item or an irrelevant UI element.
+    let mut scored: Vec<(f64, PositionedWord)> = words
+        .into_iter()
+        .map(|w| {
+            let dx = (w.cx - cursor_px).abs();
+            let dy = w.cy - cursor_py;
+            let score = if dy > 0.0 {
+                1000.0 + dx + dy
             } else {
-                dx + dy * 3.0
+                dx + dy.abs() * 0.5
             };
-            (l.text.clone(), score)
+            (score, w)
         })
         .collect();
+    scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
-    scored.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+    let ranked: Vec<PositionedWord> = scored.into_iter().map(|(_, w)| w).collect();
 
-    if let Some((best_line, _)) = scored.first() {
-        result_lines.push(best_line.clone());
-        for word in best_line.split_whitespace() {
-            if word.len() >= 2 {
-                result_lines.push(word.to_string());
-            }
+    // Emit candidates in priority order: closest word first (the label for
+    // the hovered tile), then each subsequent word, then a joined string of
+    // all words above the cursor as a multi-token fallback (helps with
+    // names like "AK-74N" that OCR might split into "AK" "74N").
+    let above_joined: String = ranked
+        .iter()
+        .filter(|w| w.cy <= cursor_py)
+        .map(|w| w.text.clone())
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    let mut out: Vec<String> = Vec::with_capacity(ranked.len() + 1);
+    for w in &ranked {
+        if w.text.len() >= 2 {
+            out.push(w.text.clone());
         }
     }
-    if let Some((second_line, score)) = scored.get(1) {
-        if *score < 300.0 {
-            result_lines.push(second_line.clone());
-        }
+    if !above_joined.is_empty() && above_joined.split_whitespace().count() > 1 {
+        out.push(above_joined);
     }
-
-    Ok(result_lines)
+    Ok(out)
 }
 
-/// Group words into text lines by Y position, sorting left-to-right within each.
-fn group_into_lines(words: &[Word]) -> Vec<Line> {
-    let mut lines: Vec<Line> = Vec::new();
-    let mut used = vec![false; words.len()];
-
-    for i in 0..words.len() {
-        if used[i] { continue; }
-        used[i] = true;
-        let mut group: Vec<Word> = vec![words[i].clone()];
-        let ref_cy = (words[i].top + words[i].bottom) / 2.0;
-
-        for j in (i + 1)..words.len() {
-            if used[j] { continue; }
-            let cy_j = (words[j].top + words[j].bottom) / 2.0;
-            if (cy_j - ref_cy).abs() < 30.0 {
-                used[j] = true;
-                group.push(words[j].clone());
-            }
-        }
-
-        group.sort_by(|a, b| a.left.partial_cmp(&b.left).unwrap_or(std::cmp::Ordering::Equal));
-
-        let text = group.iter().map(|w| w.text.clone()).collect::<Vec<_>>().join(" ");
-        let left = group.iter().map(|w| w.left).fold(f64::INFINITY, f64::min);
-        let right = group.iter().map(|w| w.right).fold(f64::NEG_INFINITY, f64::max);
-        let top = group.iter().map(|w| w.top).fold(f64::INFINITY, f64::min);
-        let bottom = group.iter().map(|w| w.bottom).fold(f64::NEG_INFINITY, f64::max);
-        lines.push(Line {
-            text,
-            left,
-            top,
-            right,
-            bottom,
-            cx: (left + right) / 2.0,
-            cy: (top + bottom) / 2.0,
-        });
-    }
-
-    lines.sort_by(|a, b| a.top.partial_cmp(&b.top).unwrap_or(std::cmp::Ordering::Equal));
-    lines
-}
-
-/// Detect the Tarkov tooltip: a vertical stack of ≥2 lines with aligned left
-/// edges (the tooltip is left-justified) and reasonable vertical spacing.
-/// Returns the TOP line's text (the bolded item name).
-///
-/// MIN_CHAIN_LEN is 2 so short tooltips (ammo, simple consumables — often
-/// just name + 1 stat line) still use the title path instead of falling back
-/// to cursor proximity, which is less accurate for multi-slot items.
-fn detect_tooltip_title(lines: &[Line]) -> Option<String> {
-    if lines.len() < 2 {
-        return None;
-    }
-
-    // Typical tooltip line height in 2x space is ~30-50px; gap between lines
-    // ~5-30px. So line-top-to-line-top spacing is roughly 30-80px.
-    const LEFT_TOLERANCE: f64 = 20.0;
-    const MIN_GAP: f64 = 15.0;
-    const MAX_GAP: f64 = 90.0;
-    const MIN_CHAIN_LEN: usize = 2;
-
-    let mut best_chain: Vec<usize> = Vec::new();
-
-    for start in 0..lines.len() {
-        let mut chain = vec![start];
-        let mut last_idx = start;
-        loop {
-            let last = &lines[last_idx];
-            let mut next: Option<usize> = None;
-            for j in (last_idx + 1)..lines.len() {
-                let cand = &lines[j];
-                let gap = cand.top - last.bottom;
-                if gap < -5.0 { continue; } // overlapping / out of order
-                if gap > MAX_GAP { break; } // sorted by top, so no later line qualifies
-                if gap < MIN_GAP && gap > -5.0 {
-                    // Could still be a valid next line, but very tight — accept
-                }
-                if (cand.left - last.left).abs() <= LEFT_TOLERANCE && gap <= MAX_GAP {
-                    next = Some(j);
-                    break;
-                }
-            }
-            match next {
-                Some(j) => {
-                    chain.push(j);
-                    last_idx = j;
-                }
-                None => break,
-            }
-        }
-        if chain.len() > best_chain.len() {
-            best_chain = chain;
-        }
-    }
-
-    if best_chain.len() >= MIN_CHAIN_LEN {
-        // Sanity: reject chains of single short tokens (e.g. a vertical column
-        // of inventory slot numbers). Tooltip body lines are usually wordy.
-        let title_line = &lines[best_chain[0]];
-        if title_line.text.trim().len() >= 3 {
-            return Some(title_line.text.clone());
-        }
-    }
-    None
-}
-
-/// 2x upscale + luminance contrast stretch. Output is BGRA (ready for
-/// SoftwareBitmap), since the OCR path expects BGRA anyway.
-///
-/// Thresholds are auto-calibrated from the capture's histogram (5th/95th
-/// percentile) so the stretch adapts to the user's display brightness, HDR,
-/// and in-game gamma instead of relying on hardcoded LO/HI values.
-fn preprocess(rgba: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
-    let scale: u32 = 2;
+/// Upscale by `scale`x + luminance contrast stretch. Output is BGRA (ready
+/// for SoftwareBitmap). Thresholds are auto-calibrated from the capture's
+/// luminance histogram (5th/95th percentile) so the stretch adapts to
+/// display brightness, HDR, and in-game gamma.
+fn preprocess(rgba: &[u8], width: u32, height: u32, scale: u32) -> (Vec<u8>, u32, u32) {
     let new_w = width * scale;
     let new_h = height * scale;
     let mut out = vec![0u8; (new_w * new_h * 4) as usize];
 
-    // Build a luminance histogram of the source pixels.
     let mut hist = [0u32; 256];
     let src_len = (width * height) as usize;
     for i in 0..src_len {
@@ -241,8 +152,6 @@ fn preprocess(rgba: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
         hist[lum as usize] += 1;
     }
 
-    // Pick LO = 5th percentile, HI = 95th percentile. Clamp to sane defaults
-    // if the capture is near-uniform (all-black startup screen, etc.).
     let total = src_len as u32;
     let lo_target = total / 20;
     let hi_target = total - total / 20;
@@ -261,8 +170,6 @@ fn preprocess(rgba: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
             break;
         }
     }
-    // Require a minimum contrast window so a near-uniform capture doesn't
-    // collapse to a degenerate lo==hi stretch that divides by zero.
     if hi - lo < 40 {
         lo = (lo - 20).max(0);
         hi = (hi + 20).min(255);
@@ -296,12 +203,13 @@ fn preprocess(rgba: &[u8], width: u32, height: u32) -> (Vec<u8>, u32, u32) {
     (out, new_w, new_h)
 }
 
-/// Run Windows OCR and return each word with its bounding rect.
-fn ocr_with_positions(
+/// Run Windows OCR and return each recognized word with its bounding-rect
+/// center (in the processed image's coordinate system).
+fn ocr_words_positioned(
     bgra: &[u8],
     width: u32,
     height: u32,
-) -> Result<Vec<Word>, String> {
+) -> Result<Vec<PositionedWord>, String> {
     if width == 0 || height == 0 || bgra.len() < (width * height * 4) as usize {
         return Ok(Vec::new());
     }
@@ -325,25 +233,18 @@ fn ocr_with_positions(
 
     let mut words = Vec::new();
     let ocr_lines = result.Lines().map_err(|e| format!("Failed to get lines: {e}"))?;
-
     for line in ocr_lines {
         if let Ok(line_words) = line.Words() {
             for word in line_words {
                 if let Ok(text) = word.Text() {
-                    let s = text.to_string_lossy();
-                    if s.trim().is_empty() {
+                    let s = text.to_string_lossy().trim().to_string();
+                    if s.is_empty() {
                         continue;
                     }
                     if let Ok(rect) = word.BoundingRect() {
-                        let left = rect.X as f64;
-                        let top = rect.Y as f64;
-                        words.push(Word {
-                            text: s.trim().to_string(),
-                            left,
-                            top,
-                            right: left + rect.Width as f64,
-                            bottom: top + rect.Height as f64,
-                        });
+                        let cx = rect.X as f64 + rect.Width as f64 / 2.0;
+                        let cy = rect.Y as f64 + rect.Height as f64 / 2.0;
+                        words.push(PositionedWord { text: s, cx, cy });
                     }
                 }
             }
