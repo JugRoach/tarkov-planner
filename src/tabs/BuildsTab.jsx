@@ -545,15 +545,17 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds, myProfile }) {
   if (screen === "leaderboard") {
     const modeLabel = { ergo: "ERGO", recoil: "RECOIL", "recoil-balanced": "BAL" };
     const modeColor = { ergo: T.cyan, recoil: T.orange, "recoil-balanced": T.gold };
+    // Combined recoil (vertical + horizontal) is what players actually feel
+    // in raid — sum both axes so the leaderboard ranks and display use the
+    // same metric.
+    const totalRecoil = (s) => (s.recoilV || 0) + (s.recoilH || 0);
     const sortedRows = (leaderboardRows || []).slice().sort((a, b) => {
       const diff = leaderboardMode === "ergo"
         ? b.stats.ergo - a.stats.ergo
-        : a.stats.recoilV - b.stats.recoilV;
+        : totalRecoil(a.stats) - totalRecoil(b.stats);
       if (diff !== 0) return diff;
-      // Tiebreakers keep ordering deterministic so rows never appear
-      // "stuck" in fetch-completion order when the primary metric ties.
       const altDiff = leaderboardMode === "ergo"
-        ? a.stats.recoilV - b.stats.recoilV
+        ? totalRecoil(a.stats) - totalRecoil(b.stats)
         : b.stats.ergo - a.stats.ergo;
       if (altDiff !== 0) return altDiff;
       const nameA = (a.weapon.shortName || a.weapon.name || "");
@@ -696,7 +698,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds, myProfile }) {
                     color: T.orange,
                     lineHeight: 1,
                   }}>
-                    R {s.recoilV}
+                    R {totalRecoil(s)}
                   </div>
                   <div style={{
                     fontSize: T.fs2,
