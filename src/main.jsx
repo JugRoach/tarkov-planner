@@ -117,13 +117,19 @@ window.storage = {
   }
 }
 
-// Detect if this is the scanner popout window
-// Try sync check via __TAURI_INTERNALS__, async fallback via API
+// Detect if this is the scanner popout window. URL query is the most reliable
+// signal (set by the Rust-side WebviewUrl), with Tauri internals and async
+// API as fallbacks so existing installed versions that don't pass the query
+// param still work.
+function detectIsPopout() {
+  if (typeof window === 'undefined') return false;
+  if (window.location?.search?.includes('window=scanner-popout')) return true;
+  if (window.__TAURI_INTERNALS__?.metadata?.currentWebview?.label === 'scanner-popout') return true;
+  return false;
+}
+
 function AppRoot() {
-  const [isPopout, setIsPopout] = React.useState(() => {
-    const label = window.__TAURI_INTERNALS__?.metadata?.currentWebview?.label;
-    return label === 'scanner-popout';
-  });
+  const [isPopout, setIsPopout] = React.useState(detectIsPopout);
 
   React.useEffect(() => {
     if (isPopout) return;

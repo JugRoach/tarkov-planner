@@ -1,22 +1,65 @@
+import { useEffect, useState } from "react";
 import { T } from "../theme.js";
 import { useScanAndFetch } from "../hooks/useScanAndFetch.js";
+
+const FLEA_UNLOCK_LEVEL = 15;
 
 function formatPrice(price) {
   if (!price && price !== 0) return "\u2014";
   return price.toLocaleString() + " \u20BD";
 }
 
+// Subscribe to the profile stored in localStorage by the main window so the
+// scanner popout can honor the user's pickup threshold + PMC level without
+// a prop drill (the popout lives in a separate Tauri webview).
+function useProfileSettings() {
+  const [settings, setSettings] = useState({ threshold: 20000, pmcLevel: 1 });
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const raw = localStorage.getItem("tg-myprofile-v3");
+        if (!raw) return;
+        const p = JSON.parse(raw);
+        const threshold = typeof p?.scannerThreshold === "number" ? p.scannerThreshold : 20000;
+        const pmcLevel = typeof p?.pmcLevel === "number" ? p.pmcLevel : 1;
+        setSettings({ threshold, pmcLevel });
+      } catch (_) {}
+    };
+    refresh();
+    const handler = (e) => { if (!e.key || e.key === "tg-myprofile-v3") refresh(); };
+    window.addEventListener("storage", handler);
+    return () => window.removeEventListener("storage", handler);
+  }, []);
+  return settings;
+}
+
 export default function ScannerPopout() {
   const { scanning, scanStatus, item, dbLoading, toggleScanning } = useScanAndFetch({ autoStart: true });
+  const { threshold, pmcLevel } = useProfileSettings();
 
-  // Derived price data
   const bestSell = item?.sellFor
     ?.filter((s) => s.priceRUB > 0)
     .sort((a, b) => b.priceRUB - a.priceRUB)[0];
-  const fleaPrice = item?.avg24hPrice;
+  const fleaPrice = item?.avg24hPrice || 0;
   const slots = (item?.width || 1) * (item?.height || 1);
-  const perSlot = fleaPrice ? Math.round(fleaPrice / slots) : null;
   const change = item?.changeLast48hPercent;
+
+  // Effective "best sell price" — flea only counts if the user has unlocked it.
+  const canUseFlea = pmcLevel >= FLEA_UNLOCK_LEVEL;
+  const fleaEligible = canUseFlea ? fleaPrice : 0;
+  const bestSellRUB = bestSell?.priceRUB || 0;
+  const bestRUB = Math.max(bestSellRUB, fleaEligible);
+  const perSlot = bestRUB ? Math.round(bestRUB / slots) : null;
+  const source =
+    bestRUB === 0 ? null :
+    bestSellRUB > fleaEligible ? (bestSell?.vendor?.name || "Trader") :
+    "Flea";
+
+  // Pickup decision: only render the ✓/✗ + border when we have real data.
+  const hasVerdict = item && perSlot != null;
+  const above = hasVerdict && perSlot >= threshold;
+  const verdictColor = !hasVerdict ? null : above ? T.success : T.error;
+  const verdictSymbol = !hasVerdict ? "" : above ? "\u2713" : "\u2717";
 
   return (
     <div style={{
@@ -29,6 +72,8 @@ export default function ScannerPopout() {
       flexDirection: "column",
       overflow: "hidden",
       userSelect: "none",
+      boxSizing: "border-box",
+      borderLeft: `4px solid ${verdictColor || "transparent"}`,
     }}>
       {/* Header bar — scan status + controls */}
       <div style={{
@@ -120,9 +165,20 @@ export default function ScannerPopout() {
               </div>
               <div>
                 <span style={{ color: T.textDim }}>Per slot: </span>
-                <span style={{ color: perSlot ? T.textBright : T.textDim }}>{perSlot ? formatPrice(perSlot) : "\u2014"}</span>
+                <span style={{ color: verdictColor || (perSlot ? T.textBright : T.textDim), fontWeight: hasVerdict ? "bold" : "normal" }}>
+                  {perSlot ? formatPrice(perSlot) : "\u2014"}
+                </span>
+                {hasVerdict && (
+                  <span style={{ color: verdictColor, marginLeft: 4 }}>{verdictSymbol}</span>
+                )}
                 <span style={{ color: T.textDim, fontSize: T.fs1 }}> ({slots}s)</span>
               </div>
+              {hasVerdict && source && (
+                <div style={{ gridColumn: "1 / -1", fontSize: T.fs1, color: T.textDim }}>
+                  Best source: <span style={{ color: T.gold }}>{source}</span>
+                  {" \u00B7 "}threshold {formatPrice(threshold)}/slot
+                </div>
+              )}
               {bestSell && (
                 <div style={{ gridColumn: "1 / -1" }}>
                   <span style={{ color: T.textDim }}>Sell: </span>

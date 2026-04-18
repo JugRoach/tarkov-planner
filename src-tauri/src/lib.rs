@@ -23,26 +23,34 @@ fn set_click_through(window: tauri::WebviewWindow, enabled: bool) -> Result<(), 
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-fn open_scanner_popout(app: tauri::AppHandle) -> Result<(), String> {
-    // If already open, just focus it
+// Internal: runs on the Tauri main thread. Called both by the async `open_scanner_popout`
+// command and by the Alt+P global-shortcut handler.
+fn open_scanner_popout_on_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("scanner-popout") {
         let _ = w.show();
         let _ = w.set_focus();
-        return Ok(());
+        return;
     }
-
-    WebviewWindowBuilder::new(&app, "scanner-popout", WebviewUrl::App("index.html".into()))
+    let _ = WebviewWindowBuilder::new(app, "scanner-popout", WebviewUrl::App("index.html?window=scanner-popout".into()))
         .title("Scanner")
         .inner_size(340.0, 220.0)
         .min_inner_size(280.0, 160.0)
         .always_on_top(true)
         .resizable(true)
         .decorations(true)
-        .build()
-        .map_err(|e| e.to_string())?;
+        .build();
+}
 
-    Ok(())
+// Async so it runs on Tauri's task pool rather than blocking the IPC thread,
+// and dispatches the actual window build to the main thread. Calling
+// WebviewWindowBuilder::build() synchronously from a sync command was
+// deadlocking the new webview before it could load its JS (symptom: popout
+// opens as an unresponsive white window).
+#[tauri::command]
+async fn open_scanner_popout(app: tauri::AppHandle) -> Result<(), String> {
+    let handle = app.clone();
+    app.run_on_main_thread(move || open_scanner_popout_on_main(&handle))
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -128,7 +136,7 @@ pub fn run() {
                 if let Some(w) = h.get_webview_window("scanner-popout") {
                     let _ = w.close();
                 } else {
-                    let _ = open_scanner_popout(h.clone());
+                    open_scanner_popout_on_main(h);
                 }
             })?;
 

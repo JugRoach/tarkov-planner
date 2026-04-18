@@ -199,7 +199,7 @@ export default function ProfileTab({ myProfile, saveMyProfile, setTab }) {
         )}
 
         {/* ── PROGRESSION ── */}
-        <SL c={<>PROGRESSION<Tip text={`Your PMC level and trader loyalty levels. Used by the Builds tab's "only show builds I can actually make" filter so the leaderboard stops suggesting mods you can't buy. Flea Market unlocks at PMC level ${FLEA_UNLOCK_LEVEL}.`} /></>} />
+        <SL c={<>PROGRESSION<Tip text={`Your PMC level, trader loyalty levels, and the scanner's pickup threshold. PMC + trader levels drive the Builds tab's "builds I can make" filter (Flea Market unlocks at PMC ${FLEA_UNLOCK_LEVEL}). The pickup threshold colors the scanner popout green (worth grabbing) or red (skip) based on the best of vendor or flea price per slot.`} /></>} />
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: `2px solid ${T.gold}`, padding: 12, marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
             <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 0.8, flexShrink: 0, minWidth: 90 }}>PMC LEVEL</div>
@@ -216,6 +216,24 @@ export default function ProfileTab({ myProfile, saveMyProfile, setTab }) {
             />
             <div style={{ fontSize: T.fs1, color: (myProfile.pmcLevel ?? 1) >= FLEA_UNLOCK_LEVEL ? T.success : T.textDim, flex: 1 }}>
               {(myProfile.pmcLevel ?? 1) >= FLEA_UNLOCK_LEVEL ? "Flea Market unlocked" : `Flea Market at ${FLEA_UNLOCK_LEVEL}`}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: T.fs2, color: T.textDim, letterSpacing: 0.8, flexShrink: 0, minWidth: 90 }}>PICKUP ₽/SLOT</div>
+            <input
+              type="number"
+              min={0}
+              max={1000000}
+              step={1000}
+              value={myProfile.scannerThreshold ?? 20000}
+              onChange={(e) => {
+                const n = Math.max(0, parseInt(e.target.value, 10) || 0);
+                saveMyProfile({ ...myProfile, scannerThreshold: n });
+              }}
+              style={{ background: T.inputBg, border: `1px solid ${T.borderBright}`, color: T.textBright, padding: "6px 10px", fontSize: T.fs3, fontFamily: T.sans, outline: "none", width: 120, textAlign: "center" }}
+            />
+            <div style={{ fontSize: T.fs1, color: T.textDim, flex: 1, lineHeight: 1.4 }}>
+              Scanner flags items above this ₽/slot (using best of vendor or flea) as worth picking up.
             </div>
           </div>
           <div style={{ borderTop: `1px solid ${T.border}`, paddingTop: 10, marginTop: 4 }}>
