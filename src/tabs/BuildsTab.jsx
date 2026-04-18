@@ -1,9 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { T } from '../theme.js';
 import { SL, Badge, Btn, Tip } from '../components/ui/index.js';
 import { fetchAPI, WEAPONS_LIST_Q, weaponDetailQ } from '../api.js';
 import { encodeBuild, decodeBuild } from '../lib/shareCodes.js';
 import { optimizeBuild } from '../lib/buildOptimizer.js';
+import { calcStats, getCheapestPrice } from '../lib/buildStats.js';
+
+// Turn tarkov.dev caliber strings into readable labels:
+//   "Caliber556x45NATO" → "5.56x45 NATO"
+//   "Caliber762x39"     → "7.62x39"
+//   "Caliber338LAPUA"   → ".338 LAPUA"
+//   "Caliber12g"        → "12g"
+function formatCaliber(raw) {
+  if (!raw) return "?";
+  let s = raw.replace(/^Caliber/, "");
+  // Standard calibers with 'x': 556x45 → 5.56x45
+  s = s.replace(/^(\d)(\d{2})x/, "$1.$2x");
+  // Three-digit caliber alone (like 338, 408): prepend a dot
+  s = s.replace(/^(\d{3})([A-Z]|$)/, ".$1$2");
+  // Split camelCase (MP-5 suffixes like NATO, PARA, LAPUA, ACP)
+  s = s.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+  return s.trim();
+}
 
 // Compact per-mod stat badges — green for helpful, red for costly, cyan/orange
 // for neutral stats like capacity / malfunction / zoom. Shared by the mod picker
@@ -35,7 +53,12 @@ function ModStats({ mod }) {
 export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
   const [weapons, setWeapons] = useState(null);
   const [weaponsLoading, setWeaponsLoading] = useState(false);
-  const [screen, setScreen] = useState("list"); // "list" | "pick" | "edit"
+  const [screen, setScreen] = useState("list"); // "list" | "pick" | "edit" | "leaderboard"
+  const [leaderboardCaliber, setLeaderboardCaliber] = useState(null); // exact caliber string, null = pick first available
+  const [leaderboardMode, setLeaderboardMode] = useState("recoil-balanced"); // "ergo" | "recoil" | "recoil-balanced"
+  const [leaderboardRows, setLeaderboardRows] = useState(null); // null while loading
+  const [leaderboardProgress, setLeaderboardProgress] = useState({ loaded: 0, total: 0 });
+  const weaponDetailCache = useRef({}); // { [weaponId]: { [gameMode]: detail } }
   const [selectedWeapon, setSelectedWeapon] = useState(null); // full weapon detail data
   const [weaponLoading, setWeaponLoading] = useState(false);
   const [mods, setMods] = useState({}); // { slotPath: modItemId }
@@ -70,6 +93,69 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
     })();
   }, [gameMode]);
 
+  // Unique, sorted list of calibers present in the weapon DB.
+  const calibers = useMemo(() => {
+    if (!weapons) return [];
+    const set = new Set();
+    for (const w of weapons) {
+      if (w.properties?.caliber) set.add(w.properties.caliber);
+    }
+    return Array.from(set).sort((a, b) => formatCaliber(a).localeCompare(formatCaliber(b)));
+  }, [weapons]);
+
+  // Pick the first caliber when none is selected yet (e.g. on first open).
+  useEffect(() => {
+    if (leaderboardCaliber == null && calibers.length > 0) {
+      setLeaderboardCaliber(calibers[0]);
+    }
+  }, [calibers, leaderboardCaliber]);
+
+  // Leaderboard: fetch every weapon detail for the selected caliber in
+  // parallel, optimize + compute stats, and commit the full row set in a
+  // single state update. Atomic commit avoids a class of sort-order bugs
+  // where progressively-pushed rows can race with React renders when the
+  // mode or caliber changes mid-load.
+  useEffect(() => {
+    if (screen !== "leaderboard" || !weapons || !leaderboardCaliber) return;
+    let cancelled = false;
+    const filtered = weapons.filter((w) => w.properties?.caliber === leaderboardCaliber);
+    setLeaderboardRows([]);
+    setLeaderboardProgress({ loaded: 0, total: filtered.length });
+
+    const loadOne = async (w) => {
+      const cached = weaponDetailCache.current[w.id]?.[gameMode];
+      if (cached) return cached;
+      try {
+        const d = await fetchAPI(weaponDetailQ(w.id, gameMode));
+        const detail = d?.item || null;
+        if (detail) {
+          weaponDetailCache.current[w.id] = weaponDetailCache.current[w.id] || {};
+          weaponDetailCache.current[w.id][gameMode] = detail;
+        }
+        return detail;
+      } catch (_) {
+        return null;
+      }
+    };
+
+    (async () => {
+      let loaded = 0;
+      const results = await Promise.all(filtered.map(async (w) => {
+        const detail = await loadOne(w);
+        loaded += 1;
+        if (!cancelled) setLeaderboardProgress({ loaded, total: filtered.length });
+        if (!detail) return null;
+        const mods = optimizeBuild(detail, leaderboardMode);
+        const stats = calcStats(detail, mods);
+        return { weapon: detail, mods, stats };
+      }));
+      if (cancelled) return;
+      setLeaderboardRows(results.filter(Boolean));
+    })();
+
+    return () => { cancelled = true; };
+  }, [screen, leaderboardCaliber, leaderboardMode, gameMode, weapons]);
+
   // Load full weapon detail when picking a weapon
   const selectWeapon = async (weaponId) => {
     setWeaponLoading(true);
@@ -91,103 +177,10 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
     setWeaponLoading(false);
   };
 
-  // Helper: get cheapest price for a mod
-  const getCheapestPrice = (item) => {
-    if (!item?.buyFor?.length) return null;
-    const sorted = [...item.buyFor].sort((a, b) => (a.priceRUB || Infinity) - (b.priceRUB || Infinity));
-    return sorted[0];
-  };
-
   // Helper: format ruble price
   const fmtPrice = (rub) => {
     if (!rub) return "—";
     return rub >= 1000 ? Math.round(rub / 1000) + "k ₽" : rub + " ₽";
-  };
-
-  // Calculate stats from base weapon + selected mods
-  const calcStats = () => {
-    const empty = { ergo: 0, recoilV: 0, recoilH: 0, weight: 0, accMod: 0, magCapacity: 0, fireRate: 0, fireModes: [], sightingRange: 0, zoomLevels: [], deviationMax: 0, centerOfImpact: 0, loudness: 0, velocity: 0, loadMod: 0, checkMod: 0, malfChance: 0, totalCost: 0, modCount: 0, effectiveDist: 0, convergence: 0 };
-    if (!selectedWeapon) return empty;
-    const wp = selectedWeapon.properties;
-    let ergo = wp.ergonomics || 0;
-    let recoilMod = 0;
-    let accMod = 0;
-    let weight = selectedWeapon.weight || 0;
-    let magCapacity = 0;
-    let sightingRange = wp.sightingRange || 0;
-    let zoomLevels = [];
-    let deviationMax = 0;
-    let centerOfImpact = wp.centerOfImpact || 0;
-    let loudness = 0;
-    let velocity = 0;
-    let loadMod = 0;
-    let checkMod = 0;
-    let malfChance = 0;
-    let totalCost = 0;
-    let modCount = 0;
-
-    // Add weapon base price
-    const wpPrice = getCheapestPrice(selectedWeapon);
-    if (wpPrice) totalCost += wpPrice.priceRUB || 0;
-
-    const walkSlots = (slots, pathPrefix) => {
-      if (!slots) return;
-      slots.forEach(slot => {
-        const path = pathPrefix ? `${pathPrefix}.${slot.nameId}` : slot.nameId;
-        const modId = mods[path];
-        if (!modId) return;
-        const mod = slot.filters?.allowedItems?.find(i => i.id === modId);
-        if (!mod) return;
-        const mp = mod.properties;
-        modCount++;
-        if (mp?.ergonomics) ergo += mp.ergonomics;
-        if (mp?.recoilModifier) recoilMod += mp.recoilModifier;
-        if (mp?.accuracyModifier) accMod += mp.accuracyModifier;
-        if (mod.weight) weight += mod.weight;
-        if (mod.velocity) velocity += mod.velocity;
-        if (mod.loudness) loudness += mod.loudness;
-        // Magazine-specific
-        if (mp?.capacity) magCapacity = mp.capacity;
-        if (mp?.loadModifier) loadMod = mp.loadModifier;
-        if (mp?.ammoCheckModifier) checkMod = mp.ammoCheckModifier;
-        if (mp?.malfunctionChance) malfChance = mp.malfunctionChance;
-        // Optic-specific
-        if (mp?.sightingRange && mp.sightingRange > sightingRange) sightingRange = mp.sightingRange;
-        if (mp?.zoomLevels?.length) zoomLevels = mp.zoomLevels;
-        // Barrel-specific
-        if (mp?.deviationMax) deviationMax = mp.deviationMax;
-        if (mp?.centerOfImpact) centerOfImpact = mp.centerOfImpact;
-        // Price
-        const modPrice = getCheapestPrice(mod);
-        if (modPrice) totalCost += modPrice.priceRUB || 0;
-        if (mp?.slots) walkSlots(mp.slots, path);
-      });
-    };
-    walkSlots(wp.slots, "");
-
-    return {
-      ergo: Math.round(ergo),
-      recoilV: Math.round((wp.recoilVertical || 0) * (1 + recoilMod)),
-      recoilH: Math.round((wp.recoilHorizontal || 0) * (1 + recoilMod)),
-      weight: Math.round(weight * 100) / 100,
-      accMod: Math.round(accMod * 100),
-      magCapacity,
-      fireRate: wp.fireRate || 0,
-      fireModes: wp.fireModes || [],
-      sightingRange,
-      zoomLevels,
-      deviationMax,
-      centerOfImpact: Math.round(centerOfImpact * 100) / 100,
-      loudness,
-      velocity: Math.round(velocity),
-      loadMod: Math.round(loadMod * 100),
-      checkMod: Math.round(checkMod * 100),
-      malfChance: Math.round(malfChance * 100),
-      totalCost,
-      modCount,
-      effectiveDist: wp.effectiveDistance || 0,
-      convergence: wp.convergence || 0,
-    };
   };
 
   // Save current build
@@ -346,7 +339,7 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
   // ─── RENDER: BUILD EDITOR ───
   if (screen === "edit" && selectedWeapon) {
     const wp = selectedWeapon.properties;
-    const stats = calcStats();
+    const stats = calcStats(selectedWeapon, mods);
     const baseErgo = wp.ergonomics || 0;
     const baseRecoilV = wp.recoilVertical || 0;
     const baseRecoilH = wp.recoilHorizontal || 0;
@@ -540,12 +533,170 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds }) {
     );
   }
 
+  // ─── RENDER: LEADERBOARD ───
+  if (screen === "leaderboard") {
+    const modeLabel = { ergo: "ERGO", recoil: "RECOIL", "recoil-balanced": "BAL" };
+    const modeColor = { ergo: T.cyan, recoil: T.orange, "recoil-balanced": T.gold };
+    const sortedRows = (leaderboardRows || []).slice().sort((a, b) => {
+      const diff = leaderboardMode === "ergo"
+        ? b.stats.ergo - a.stats.ergo
+        : a.stats.recoilV - b.stats.recoilV;
+      if (diff !== 0) return diff;
+      // Tiebreakers keep ordering deterministic so rows never appear
+      // "stuck" in fetch-completion order when the primary metric ties.
+      const altDiff = leaderboardMode === "ergo"
+        ? a.stats.recoilV - b.stats.recoilV
+        : b.stats.ergo - a.stats.ergo;
+      if (altDiff !== 0) return altDiff;
+      const nameA = (a.weapon.shortName || a.weapon.name || "");
+      const nameB = (b.weapon.shortName || b.weapon.name || "");
+      return nameA.localeCompare(nameB);
+    });
+    const loading = leaderboardProgress.loaded < leaderboardProgress.total;
+    const loadRowIntoEditor = (row) => {
+      setSelectedWeapon(row.weapon);
+      setMods({ ...row.mods });
+      setBuildName(`${row.weapon.shortName || row.weapon.name} (${modeLabel[leaderboardMode]})`);
+      setEditingBuild(null);
+      setScreen("edit");
+    };
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <button onClick={() => setScreen("list")} style={{ background: "transparent", border: "none", color: T.textDim, fontSize: T.fs3, cursor: "pointer", fontFamily: T.sans, padding: 0 }}>← BACK</button>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <Tip text="Runs the optimizer across every weapon that fires the selected caliber and shows the best build for each, sorted by the chosen mode. Click a row to open that build in the editor for tweaks." />
+              <div style={{ fontSize: T.fs1, color: T.textDim }}>
+                {loading
+                  ? `${leaderboardProgress.loaded}/${leaderboardProgress.total}`
+                  : `${sortedRows.length} build${sortedRows.length === 1 ? "" : "s"}`}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: T.fs1, color: T.textDim, letterSpacing: 0.8, marginBottom: 4 }}>CALIBER</div>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+            {calibers.map((c) => (
+              <Btn key={c} ch={formatCaliber(c)} compact active={leaderboardCaliber === c} onClick={() => setLeaderboardCaliber(c)} />
+            ))}
+          </div>
+          <div style={{ fontSize: T.fs1, color: T.textDim, letterSpacing: 0.8, marginBottom: 4 }}>OPTIMIZE FOR</div>
+          <div style={{ display: "flex", gap: 4 }}>
+            {["ergo", "recoil", "recoil-balanced"].map((m) => (
+              <button
+                key={m}
+                onClick={() => setLeaderboardMode(m)}
+                style={{
+                  flex: 1,
+                  background: leaderboardMode === m ? modeColor[m] + "22" : "transparent",
+                  border: `1px solid ${leaderboardMode === m ? modeColor[m] : T.border}`,
+                  color: leaderboardMode === m ? modeColor[m] : T.textDim,
+                  padding: "6px 0",
+                  fontSize: T.fs1,
+                  cursor: "pointer",
+                  fontFamily: T.sans,
+                  letterSpacing: 0.8,
+                  fontWeight: leaderboardMode === m ? "bold" : "normal",
+                }}
+              >
+                {modeLabel[m]}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
+          {weaponsLoading && <div style={{ color: T.textDim, fontSize: T.fs3, textAlign: "center", padding: 20 }}>Loading weapons from tarkov.dev...</div>}
+          {!weaponsLoading && loading && (
+            <div style={{
+              background: T.surface,
+              border: `1px solid ${T.border}`,
+              borderLeft: `3px solid ${T.gold}`,
+              padding: "18px 16px",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: T.fs3, color: T.gold, fontWeight: "bold", letterSpacing: 1.5, marginBottom: 6 }}>
+                LOADING BUILDS…
+              </div>
+              <div style={{ fontSize: T.fs2, color: T.textDim }}>
+                Fetching weapon data and running the optimizer
+              </div>
+              <div style={{ fontSize: T.fs2, color: T.textBright, marginTop: 6, fontFamily: T.mono }}>
+                {leaderboardProgress.loaded} / {leaderboardProgress.total}
+              </div>
+            </div>
+          )}
+          {!weaponsLoading && !loading && sortedRows.length === 0 && (
+            <div style={{ color: T.textDim, fontSize: T.fs2, textAlign: "center", padding: 20 }}>No weapons for this caliber.</div>
+          )}
+          {!loading && sortedRows.map((row, idx) => {
+            const w = row.weapon;
+            const s = row.stats;
+            const isErgoMode = leaderboardMode === "ergo";
+            return (
+              <button
+                key={w.id}
+                onClick={() => loadRowIntoEditor(row)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  background: T.surface, border: `1px solid ${T.border}`,
+                  borderLeft: `3px solid ${idx === 0 ? T.gold : T.border}`,
+                  padding: 10, marginBottom: 6, cursor: "pointer", textAlign: "left",
+                }}
+              >
+                <div style={{ fontSize: T.fs3, color: idx === 0 ? T.gold : T.textDim, fontWeight: "bold", width: 24, textAlign: "center", flexShrink: 0 }}>
+                  {idx + 1}
+                </div>
+                {w.gridImageLink && (
+                  <img src={w.gridImageLink} alt="" style={{ width: 64, height: 32, objectFit: "contain", background: T.inputBg, border: `1px solid ${T.border}`, flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: T.fs2, color: T.textBright, fontWeight: "bold", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {w.shortName || w.name}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+                    {s.accMod !== 0 && (
+                      <span style={{ fontSize: T.fs1, color: s.accMod < 0 ? T.error : T.success }}>
+                        {s.accMod > 0 ? "+" : ""}{s.accMod}% acc
+                      </span>
+                    )}
+                    <span style={{ fontSize: T.fs1, color: T.textDim }}>{s.weight}kg</span>
+                    <span style={{ fontSize: T.fs1, color: T.textDim }}>{s.modCount} mods</span>
+                    <span style={{ fontSize: T.fs1, color: T.gold }}>{fmtPrice(s.totalCost)}</span>
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", flexShrink: 0, minWidth: 72, display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{
+                    fontSize: T.fs2,
+                    fontWeight: isErgoMode ? "normal" : "bold",
+                    color: T.orange,
+                    lineHeight: 1,
+                  }}>
+                    R {s.recoilV}
+                  </div>
+                  <div style={{
+                    fontSize: T.fs2,
+                    fontWeight: isErgoMode ? "bold" : "normal",
+                    color: T.cyan,
+                    lineHeight: 1,
+                  }}>
+                    E {s.ergo}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // ─── RENDER: MY BUILDS LIST (default) ───
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "10px 14px" }}>
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={() => setScreen("pick")} style={{ flex: 1, background: T.gold + "22", border: `2px solid ${T.gold}`, color: T.gold, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, fontWeight: "bold" }}>+ NEW BUILD</button>
+          <button onClick={() => setScreen("leaderboard")} style={{ flex: 1, background: T.cyan + "22", border: `2px solid ${T.cyan}`, color: T.cyan, padding: "10px 0", fontSize: T.fs2, cursor: "pointer", fontFamily: T.sans, letterSpacing: 1, fontWeight: "bold" }}>COMPARE BUILDS</button>
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14 }}>
