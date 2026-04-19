@@ -38,8 +38,11 @@ export default function ScannerPopout() {
   const { scanning, scanStatus, item, dbLoading, toggleScanning } = useScanAndFetch({ autoStart: true });
   const { threshold, pmcLevel } = useProfileSettings();
 
+  // Exclude flea from bestSell — the left column already shows flea on its
+  // own line, so this slot must always be the best *trader* offer (otherwise
+  // when flea wins, both lines render the flea entry with vendor "Flea Market").
   const bestSell = item?.sellFor
-    ?.filter((s) => s.priceRUB > 0)
+    ?.filter((s) => s.priceRUB > 0 && s.vendor?.name !== "Flea Market")
     .sort((a, b) => b.priceRUB - a.priceRUB)[0];
   const fleaPrice = item?.avg24hPrice || 0;
   const slots = (item?.width || 1) * (item?.height || 1);

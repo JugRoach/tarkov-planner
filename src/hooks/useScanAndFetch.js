@@ -92,9 +92,13 @@ export function useScanAndFetch({ autoStart = false, onPrice } = {}) {
         return;
       }
 
-      // Lines come back sorted by cursor-proximity (closest first). Try each
-      // in order and keep the highest-scoring match — strict > means a tie
-      // goes to whichever candidate was tried first (i.e., closest to cursor).
+      // Lines come back sorted by cursor-proximity (closest first).
+      // Strategy: prefer the closest line if it has a confident match.
+      // Only fall through to farther lines when the closer ones don't
+      // hit CONFIDENT_THRESHOLD. This prevents a stray high-confidence
+      // match on far-away UI text (e.g. "RPliers" elsewhere on screen)
+      // from overriding what the user is actually hovering ("HK MP5").
+      const CONFIDENT_THRESHOLD = 0.75;
       const cleanedCandidates = lines
         .map((l) => cleanOcr(l))
         .filter((c) => c.length >= 2);
@@ -105,17 +109,29 @@ export function useScanAndFetch({ autoStart = false, onPrice } = {}) {
       lastScanRef.current = primary;
 
       let bestMatch = null;
+      let bestCand = null;
       for (const cand of cleanedCandidates) {
         const match = findBestMatch(cand, index);
-        if (match && (!bestMatch || match.score > bestMatch.score)) {
+        if (!match) continue;
+        // Take the first candidate that's confidently a match — this is
+        // the closest-to-cursor line that resolves cleanly.
+        if (match.score >= CONFIDENT_THRESHOLD) {
           bestMatch = match;
+          bestCand = cand;
+          break;
+        }
+        // Otherwise, track the highest-scoring fallback in case nothing
+        // hits the confident threshold.
+        if (!bestMatch || match.score > bestMatch.score) {
+          bestMatch = match;
+          bestCand = cand;
         }
       }
 
       if (!mountedRef.current) return;
       if (bestMatch) {
         const { item: matched, score } = bestMatch;
-        setScanStatus(`"${primary}" \u2192 ${matched.shortName} (${Math.round(score * 100)}%)`);
+        setScanStatus(`"${bestCand}" \u2192 ${matched.shortName} (${Math.round(score * 100)}%)`);
         const priced = await fetchGql(ITEM_PRICE_Q(matched.id));
         if (!mountedRef.current) return;
         if (priced?.item) {
