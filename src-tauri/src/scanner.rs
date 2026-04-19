@@ -38,20 +38,33 @@ struct PositionedWord {
     cy: f64,
 }
 
-/// Capture a focused region around the cursor biased upward (the shortName
-/// label lives at the top of Tarkov inventory tiles), OCR it, and return
-/// candidate words sorted by distance from cursor with a strong preference
-/// for words ABOVE cursor (the label is at the top of the tile). This
-/// disambiguates adjacent tiles — e.g., Hawk vs Eagle gunpowder side by
-/// side: both labels get OCR'd, but only Hawk's is directly above cursor.
-#[tauri::command]
-pub fn scan_at_cursor() -> Result<Vec<String>, String> {
-    let (cx, cy) = get_cursor_pos().map_err(|e| format!("Failed to get cursor pos: {e}"))?;
+/// Shared capture logic: grab a region around the cursor, return raw RGBA
+/// + dimensions + the cursor's position within the capture's coordinate
+/// space. The capture is biased upward (3/4 above cursor) because Tarkov's
+/// shortName label sits at the top of an inventory tile.
+struct CursorCapture {
+    rgba: Vec<u8>,
+    width: u32,
+    height: u32,
+    cursor_x_in_capture: i32,
+    cursor_y_in_capture: i32,
+}
 
-    let region_w: u32 = 220;
-    let region_h: u32 = 130;
+fn capture_region_around_cursor(region_w: u32, region_h: u32) -> Result<CursorCapture, String> {
+    // Standard capture: biased 3/4 above the cursor (tile labels sit at top).
+    capture_region_around_cursor_biased(region_w, region_h, 3, 4)
+}
+
+fn capture_region_around_cursor_biased(
+    region_w: u32,
+    region_h: u32,
+    top_num: u32,
+    top_den: u32,
+) -> Result<CursorCapture, String> {
+    let (cx, cy) = get_cursor_pos().map_err(|e| format!("Failed to get cursor pos: {e}"))?;
     let rx = (cx as i32 - region_w as i32 / 2).max(0);
-    let ry = (cy as i32 - (region_h as i32 * 3 / 4)).max(0);
+    let top_offset = (region_h as i32 * top_num as i32 / top_den as i32).max(0);
+    let ry = (cy as i32 - top_offset).max(0);
 
     let screens = Screen::all().map_err(|e| format!("Failed to enumerate screens: {e}"))?;
     let screen = screens
@@ -71,6 +84,72 @@ pub fn scan_at_cursor() -> Result<Vec<String>, String> {
 
     let (width, height) = capture.dimensions();
     let rgba = capture.into_raw();
+    Ok(CursorCapture {
+        rgba,
+        width,
+        height,
+        cursor_x_in_capture: cx as i32 - rx,
+        cursor_y_in_capture: cy as i32 - ry,
+    })
+}
+
+/// Raw pixel capture for icon-hash based recognition. Returns RGBA bytes
+/// plus dimensions and the cursor's position within the capture — the
+/// JS side needs the cursor point to isolate the tile icon before
+/// hashing. Runs in parallel with `scan_at_cursor` so OCR and dHash
+/// matching can cross-check each other.
+#[tauri::command]
+pub fn capture_rgba_at_cursor() -> Result<serde_json::Value, String> {
+    // Same capture region as scan_at_cursor — keeps both paths seeing
+    // the same pixels.
+    let cap = capture_region_around_cursor(220, 130)?;
+    Ok(serde_json::json!({
+        "rgba": cap.rgba,
+        "width": cap.width,
+        "height": cap.height,
+        "cursorX": cap.cursor_x_in_capture,
+        "cursorY": cap.cursor_y_in_capture,
+    }))
+}
+
+/// Wide OCR capture for tooltip verification. Captures a larger region with
+/// less upward bias (tooltips appear near or below the cursor) and returns
+/// OCR LINES rather than individual words — the JS side wants to match full
+/// item names like "Aseptic bandage" against each line. Intended to run on
+/// a slower cadence (~1 Hz) alongside the fast scan to confirm or correct
+/// its picks once the tooltip has had time to appear.
+#[tauri::command]
+pub fn ocr_tooltip_region() -> Result<Vec<String>, String> {
+    let region_w: u32 = 420;
+    let region_h: u32 = 320;
+    // 1/4 above cursor, 3/4 below — inverted from the fast-scan bias so
+    // the Tarkov tooltip (which flows down-right from the cursor) lands
+    // inside the capture rectangle.
+    let cap = capture_region_around_cursor_biased(region_w, region_h, 1, 4)?;
+
+    const SCALE: u32 = 3;
+    let (processed, pw, ph) = preprocess(&cap.rgba, cap.width, cap.height, SCALE);
+    debug_dump_rgba("tooltip", &processed, pw, ph);
+
+    let lines = ocr_lines(&processed, pw, ph).map_err(|e| format!("OCR failed: {e}"))?;
+    Ok(lines)
+}
+
+/// Capture a focused region around the cursor biased upward (the shortName
+/// label lives at the top of Tarkov inventory tiles), OCR it, and return
+/// candidate words sorted by distance from cursor with a strong preference
+/// for words ABOVE cursor (the label is at the top of the tile). This
+/// disambiguates adjacent tiles — e.g., Hawk vs Eagle gunpowder side by
+/// side: both labels get OCR'd, but only Hawk's is directly above cursor.
+#[tauri::command]
+pub fn scan_at_cursor() -> Result<Vec<String>, String> {
+    let region_w: u32 = 220;
+    let region_h: u32 = 130;
+    let cap = capture_region_around_cursor(region_w, region_h)?;
+
+    let width = cap.width;
+    let height = cap.height;
+    let rgba = cap.rgba;
     debug_dump_rgba("capture", &rgba, width, height);
 
     const SCALE: u32 = 4;
@@ -85,8 +164,8 @@ pub fn scan_at_cursor() -> Result<Vec<String>, String> {
     }
 
     // Cursor position in the processed (upscaled) coordinate space
-    let cursor_px = (cx as i32 - rx) as f64 * SCALE as f64;
-    let cursor_py = (cy as i32 - ry) as f64 * SCALE as f64;
+    let cursor_px = cap.cursor_x_in_capture as f64 * SCALE as f64;
+    let cursor_py = cap.cursor_y_in_capture as f64 * SCALE as f64;
 
     // Score each word by distance from cursor. Words below the cursor get
     // a large penalty — the shortName label sits ABOVE the cursor when
@@ -252,6 +331,45 @@ fn ocr_words_positioned(
     }
 
     Ok(words)
+}
+
+/// Run Windows OCR and return complete lines (space-joined words). For
+/// tooltip verification we don't care about per-word positions — we want
+/// to match "Aseptic bandage" against the full-name field of every item
+/// in the DB, so whole lines are the right granularity.
+fn ocr_lines(bgra: &[u8], width: u32, height: u32) -> Result<Vec<String>, String> {
+    if width == 0 || height == 0 || bgra.len() < (width * height * 4) as usize {
+        return Ok(Vec::new());
+    }
+
+    let bitmap = SoftwareBitmap::CreateCopyFromBuffer(
+        &bytes_to_ibuffer(bgra)?,
+        BitmapPixelFormat::Bgra8,
+        width as i32,
+        height as i32,
+    )
+    .map_err(|e| format!("Failed to create bitmap: {e}"))?;
+
+    let engine = OcrEngine::TryCreateFromUserProfileLanguages()
+        .map_err(|e| format!("OCR engine failed: {e}"))?;
+
+    let result = engine
+        .RecognizeAsync(&bitmap)
+        .map_err(|e| format!("OCR recognize failed: {e}"))?
+        .get()
+        .map_err(|e| format!("OCR result failed: {e}"))?;
+
+    let mut lines = Vec::new();
+    let ocr_lines = result.Lines().map_err(|e| format!("Failed to get lines: {e}"))?;
+    for line in ocr_lines {
+        if let Ok(text) = line.Text() {
+            let s = text.to_string_lossy().trim().to_string();
+            if !s.is_empty() {
+                lines.push(s);
+            }
+        }
+    }
+    Ok(lines)
 }
 
 /// Get current cursor position (screen coordinates)

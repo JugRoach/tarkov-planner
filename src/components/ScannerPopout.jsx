@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { T } from "../theme.js";
 import { useScanAndFetch } from "../hooks/useScanAndFetch.js";
+import { useIconIndex } from "../hooks/useIconIndex.js";
 
 const FLEA_UNLOCK_LEVEL = 15;
 
@@ -35,7 +36,10 @@ function useProfileSettings() {
 }
 
 export default function ScannerPopout() {
-  const { scanning, scanStatus, item, dbLoading, toggleScanning } = useScanAndFetch({ autoStart: true });
+  // Popout shares localStorage with the main window, so the icon index
+  // built there is reused here without a re-download.
+  const { index: iconIndex, status: iconStatus, progress: iconProgress } = useIconIndex({ autoBuild: true });
+  const { scanning, scanStatus, item, dbLoading, toggleScanning } = useScanAndFetch({ autoStart: true, iconIndex });
   const { threshold, pmcLevel } = useProfileSettings();
 
   // Exclude flea from bestSell — the left column already shows flea on its
@@ -115,7 +119,11 @@ export default function ScannerPopout() {
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
         }}>
-          {dbLoading ? "Loading..." : scanStatus || (scanning ? "Scanning..." : "Paused")}
+          {dbLoading
+            ? "Loading..."
+            : iconStatus === "building"
+              ? `Icons ${iconProgress.done}/${iconProgress.total}`
+              : scanStatus || (scanning ? "Scanning..." : "Paused")}
         </div>
       </div>
 
@@ -155,7 +163,11 @@ export default function ScannerPopout() {
               )}
             </div>
 
-            {/* Per-slot — the decision metric, big and colored */}
+            {/* Per-slot — the decision metric, big and colored. The source
+                (Flea vs trader name) is on the same line so there's no way
+                to read the number without knowing WHICH sell path produces
+                it — matters most for cheap items where flea and vendor
+                can differ by 10×. */}
             <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginBottom: 4 }}>
               <span style={{ fontSize: T.fs1, color: T.textDim, letterSpacing: 0.5 }}>PER/SLOT</span>
               <span style={{
@@ -166,57 +178,51 @@ export default function ScannerPopout() {
               }}>
                 {perSlot ? formatPrice(perSlot) : "\u2014"}
               </span>
+              {bestSource && (
+                <span style={{
+                  fontSize: T.fs2,
+                  color: T.gold,
+                  fontWeight: "bold",
+                  letterSpacing: 0.3,
+                }}>
+                  {bestSource === "Flea" ? "Flea" : (bestSell?.vendor?.name || "Trader")}
+                </span>
+              )}
               <span style={{ fontSize: T.fs1, color: T.textDim }}>({slots}s)</span>
             </div>
 
-            {/* Both prices stacked on the left; right side calls out which
-                source wins so the pickup decision is a one-glance read. */}
-            <div style={{ display: "flex", alignItems: "stretch", gap: 8, fontSize: T.fs1 }}>
-              <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{
-                  fontWeight: bestSource === "Flea" ? "bold" : "normal",
-                  color: bestSource === "Flea" ? T.gold : undefined,
-                }}>
-                  <span style={{ color: T.textDim }}>Flea </span>
-                  <span style={{ color: fleaPrice ? T.textBright : T.textDim }}>{formatPrice(fleaPrice)}</span>
-                  {change != null && change !== 0 && (
-                    <span style={{ color: change > 0 ? T.success : T.error, marginLeft: 3 }}>
-                      {change > 0 ? "+" : ""}{Math.round(change)}%
-                    </span>
-                  )}
-                </div>
-                <div style={{
-                  fontWeight: bestSource && bestSource !== "Flea" ? "bold" : "normal",
-                  color: bestSource && bestSource !== "Flea" ? T.gold : undefined,
-                }}>
-                  <span style={{ color: T.textDim }}>
-                    {bestSell?.vendor?.name || "Trader"}{" "}
+            {/* Both prices stacked. The one matching the PER/SLOT value is
+                bolded gold so it's obvious which path the big number came
+                from. The other stays visible for comparison. */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: T.fs1 }}>
+              <div style={{
+                fontWeight: bestSource === "Flea" ? "bold" : "normal",
+                color: bestSource === "Flea" ? T.gold : undefined,
+              }}>
+                <span style={{ color: T.textDim }}>Flea </span>
+                <span style={{ color: fleaPrice ? T.textBright : T.textDim }}>{formatPrice(fleaPrice)}</span>
+                {change != null && change !== 0 && (
+                  <span style={{ color: change > 0 ? T.success : T.error, marginLeft: 3 }}>
+                    {change > 0 ? "+" : ""}{Math.round(change)}%
                   </span>
-                  <span style={{ color: bestSell ? T.textBright : T.textDim }}>
-                    {bestSell ? formatPrice(bestSell.priceRUB) : "\u2014"}
+                )}
+                {!canUseFlea && fleaPrice ? (
+                  <span style={{ color: T.textDim, marginLeft: 4, fontSize: 9 }}>
+                    (lv {FLEA_UNLOCK_LEVEL}+)
                   </span>
-                </div>
+                ) : null}
               </div>
-              {bestSource && (
-                <div style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  paddingLeft: 8,
-                  borderLeft: `1px solid ${T.border}`,
-                  color: T.gold,
-                  textAlign: "center",
-                  lineHeight: 1.15,
-                  flexShrink: 0,
-                }}>
-                  <div>
-                    <div style={{ fontSize: 9, color: T.textDim, letterSpacing: 0.5 }}>SELL</div>
-                    <div style={{ fontSize: T.fs2, fontWeight: "bold" }}>
-                      {bestSource === "Flea" ? "FLEA" : (bestSell?.vendor?.name || "TRADER").toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div style={{
+                fontWeight: bestSource && bestSource !== "Flea" ? "bold" : "normal",
+                color: bestSource && bestSource !== "Flea" ? T.gold : undefined,
+              }}>
+                <span style={{ color: T.textDim }}>
+                  {bestSell?.vendor?.name || "Trader"}{" "}
+                </span>
+                <span style={{ color: bestSell ? T.textBright : T.textDim }}>
+                  {bestSell ? formatPrice(bestSell.priceRUB) : "\u2014"}
+                </span>
+              </div>
             </div>
           </div>
         ) : (

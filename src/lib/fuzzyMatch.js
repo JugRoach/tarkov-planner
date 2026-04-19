@@ -93,6 +93,34 @@ export function buildMatchIndex(items) {
   }));
 }
 
+/**
+ * Preprocess an OCR query once for reuse across many scoreItem() calls —
+ * tokenization is the expensive part, so we do it once here instead of
+ * per-item during combined scoring over the full DB.
+ */
+export function prepQuery(text) {
+  const query = (text || "").toLowerCase().trim();
+  return { query, tokens: tokenize(query) };
+}
+
+/**
+ * Score a single item row against a prepared query. Same math as the inner
+ * loop of findBestMatch — split out so the scanner can fuse OCR scoring
+ * with dHash distance across the full item DB in one pass.
+ */
+export function scoreItem(prepared, row) {
+  const { query, tokens } = prepared;
+  if (!query || query.length < 2) return 0;
+  const shortScore = similarity(query, row.shortLc);
+  const shortContains = row.shortLc.includes(query) ? 0.15 : 0;
+  const sScore = shortScore + shortContains;
+  const nameScore = similarity(query, row.nameLc) * 0.8;
+  const nameContains = row.nameLc.includes(query) ? 0.15 : 0;
+  const nScore = nameScore + nameContains;
+  const tScore = tokenScore(tokens, row.tokens);
+  return Math.max(sScore, nScore, tScore);
+}
+
 function normalizeIndex(indexOrItems) {
   if (!indexOrItems) return null;
   // Heuristic: already an index if first element has nameLc precomputed.

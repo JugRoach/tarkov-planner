@@ -74,6 +74,8 @@ pub fn run() {
             set_overlay_mode,
             set_click_through,
             scanner::scan_at_cursor,
+            scanner::capture_rgba_at_cursor,
+            scanner::ocr_tooltip_region,
             open_scanner_popout,
             close_scanner_popout,
             log_watcher::detect_tarkov_logs_dir,

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { T } from "../theme.js";
 import { API_URL } from "../constants.js";
 import { useScanAndFetch } from "../hooks/useScanAndFetch.js";
+import { useIconIndex } from "../hooks/useIconIndex.js";
 
 // Query for manual search (with prices)
 const PRICE_SEARCH_Q = (term, gameMode = "pve") =>
@@ -109,8 +110,10 @@ export default function PriceSearch() {
     setLoading(false);
   }, []);
 
+  const { index: iconIndex } = useIconIndex({ autoBuild: true });
   const { scanning, scanStatus, itemDb, dbLoading, toggleScanning } = useScanAndFetch({
     onPrice: handlePrice,
+    iconIndex,
   });
 
   // Manual search (typing)
