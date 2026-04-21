@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { T } from "../theme.js";
 import { SL, Tip } from "./ui/index.js";
 import { invoke as tauriInvoke, isTauri as tauriIsReady } from "../lib/tauri.js";
+import { applyLogSyncToProfile } from "../lib/taskSync.js";
 
 // Phase A+B: resolves the Tarkov logs directory, scans every session under
 // it, pairs RaidStarted + RaidEnded events by shortId, and shows a raid
@@ -117,6 +118,7 @@ export default function LogWatcherSection({ myProfile, saveMyProfile }) {
   const [lastScannedAt, setLastScannedAt] = useState(
     myProfile?.lastLogSync ? new Date(myProfile.lastLogSync) : null
   );
+  const [syncDelta, setSyncDelta] = useState({ addedCount: 0, completedCount: 0, failedCount: 0 });
   const [error, setError] = useState(null);
   const isTauri = tauriIsReady();
 
@@ -148,16 +150,26 @@ export default function LogWatcherSection({ myProfile, saveMyProfile }) {
       const now = new Date();
       setLastScannedAt(now);
       // Persist everything into the profile. Supabase squad-room sync picks
-      // up the updated profile shape automatically.
+      // up the updated profile shape automatically. applyLogSyncToProfile
+      // also folds the log-derived active/completed/failed IDs into
+      // `myProfile.tasks` so the task map popout (and the tasks tab) reflect
+      // what the game actually says is active — no manual re-entry needed.
       if (typeof saveMyProfile === "function" && myProfile) {
         const completedRaids = summary.raids.filter((r) => r.complete);
-        saveMyProfile({
+        const base = {
           ...myProfile,
           raidHistory: completedRaids,
           completedTasks: summary.completedTaskIds,
           failedTasks: summary.failedTaskIds,
           activeTasks: summary.activeTaskIds,
           lastLogSync: now.toISOString(),
+        };
+        const result = applyLogSyncToProfile(base, summary);
+        saveMyProfile(result.nextProfile);
+        setSyncDelta({
+          addedCount: result.addedCount,
+          completedCount: result.completedCount,
+          failedCount: result.failedCount,
         });
       }
     } catch (e) {
@@ -232,8 +244,23 @@ export default function LogWatcherSection({ myProfile, saveMyProfile }) {
                 RAID HISTORY · across {sessionCount} session{sessionCount === 1 ? "" : "s"}
               </div>
               {lastScannedAt && (
-                <div style={{ fontSize: T.fs1, color: T.textDim }}>
-                  Synced {lastScannedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                <div style={{ fontSize: T.fs1, color: T.textDim, textAlign: "right" }}>
+                  <div>
+                    Synced {lastScannedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </div>
+                  {(syncDelta.addedCount || syncDelta.completedCount || syncDelta.failedCount) ? (
+                    <div style={{ fontSize: T.fs1, marginTop: 1 }}>
+                      {syncDelta.addedCount > 0 && (
+                        <span style={{ color: T.cyan, marginRight: 6 }}>+{syncDelta.addedCount} active</span>
+                      )}
+                      {syncDelta.completedCount > 0 && (
+                        <span style={{ color: T.success, marginRight: 6 }}>−{syncDelta.completedCount} done</span>
+                      )}
+                      {syncDelta.failedCount > 0 && (
+                        <span style={{ color: T.error }}>−{syncDelta.failedCount} failed</span>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import DesktopApp from './DesktopApp.jsx'
 import ScannerPopout from './components/ScannerPopout.jsx'
+import TaskMapPopout from './components/TaskMapPopout.jsx'
 import { supabase } from './supabase.js'
 
 // Service worker handling. In Tauri the .exe bundles all frontend assets and
@@ -117,31 +118,39 @@ window.storage = {
   }
 }
 
-// Detect if this is the scanner popout window. URL query is the most reliable
+// Detect which webview we're running in. URL query is the most reliable
 // signal (set by the Rust-side WebviewUrl), with Tauri internals and async
-// API as fallbacks so existing installed versions that don't pass the query
-// param still work.
-function detectIsPopout() {
-  if (typeof window === 'undefined') return false;
-  if (window.location?.search?.includes('window=scanner-popout')) return true;
-  if (window.__TAURI_INTERNALS__?.metadata?.currentWebview?.label === 'scanner-popout') return true;
-  return false;
+// API as fallbacks so older installed builds that don't pass the query
+// param still light up correctly.
+const POPOUT_LABELS = ['scanner-popout', 'task-map-popout'];
+function detectPopoutLabel() {
+  if (typeof window === 'undefined') return null;
+  const search = window.location?.search || '';
+  for (const label of POPOUT_LABELS) {
+    if (search.includes(`window=${label}`)) return label;
+  }
+  const metaLabel = window.__TAURI_INTERNALS__?.metadata?.currentWebview?.label;
+  if (POPOUT_LABELS.includes(metaLabel)) return metaLabel;
+  return null;
 }
 
 function AppRoot() {
-  const [isPopout, setIsPopout] = React.useState(detectIsPopout);
+  const [popoutLabel, setPopoutLabel] = React.useState(detectPopoutLabel);
 
   React.useEffect(() => {
-    if (isPopout) return;
+    if (popoutLabel) return;
     (async () => {
       try {
         const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-        if (getCurrentWebviewWindow().label === 'scanner-popout') setIsPopout(true);
+        const label = getCurrentWebviewWindow().label;
+        if (POPOUT_LABELS.includes(label)) setPopoutLabel(label);
       } catch (_) {}
     })();
   }, []);
 
-  return isPopout ? <ScannerPopout /> : <DesktopApp />;
+  if (popoutLabel === 'scanner-popout') return <ScannerPopout />;
+  if (popoutLabel === 'task-map-popout') return <TaskMapPopout />;
+  return <DesktopApp />;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(

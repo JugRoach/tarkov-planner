@@ -54,6 +54,37 @@ async fn open_scanner_popout(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+// Same pattern as scanner-popout: separate always-on-top webview so the task
+// map can stay visible over Tarkov while the scanner is closed (or vice
+// versa). Runs on main thread to avoid the sync-command webview-build
+// deadlock.
+fn open_task_map_popout_on_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("task-map-popout") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        return;
+    }
+    let _ = WebviewWindowBuilder::new(
+        app,
+        "task-map-popout",
+        WebviewUrl::App("index.html?window=task-map-popout".into()),
+    )
+    .title("Task Map")
+    .inner_size(420.0, 460.0)
+    .min_inner_size(320.0, 360.0)
+    .always_on_top(true)
+    .resizable(true)
+    .decorations(true)
+    .build();
+}
+
+#[tauri::command]
+async fn open_task_map_popout(app: tauri::AppHandle) -> Result<(), String> {
+    let handle = app.clone();
+    app.run_on_main_thread(move || open_task_map_popout_on_main(&handle))
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -67,6 +98,7 @@ pub fn run() {
             scanner::capture_rgba_at_cursor,
             scanner::ocr_tooltip_region,
             open_scanner_popout,
+            open_task_map_popout,
             log_watcher::detect_tarkov_logs_dir,
             log_watcher::scan_logs_dir,
         ])
@@ -131,6 +163,15 @@ pub fn run() {
                     let _ = w.close();
                 } else {
                     open_scanner_popout_on_main(h);
+                }
+            })?;
+
+            // Alt+M: toggle task map popout window
+            register(app.handle(), Code::KeyM, |h| {
+                if let Some(w) = h.get_webview_window("task-map-popout") {
+                    let _ = w.close();
+                } else {
+                    open_task_map_popout_on_main(h);
                 }
             })?;
 

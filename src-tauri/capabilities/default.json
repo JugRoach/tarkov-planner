@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main and scanner-popout windows",
-  "windows": ["main", "scanner-popout"],
+  "description": "Capability for the main, scanner-popout, and task-map-popout windows",
+  "windows": ["main", "scanner-popout", "task-map-popout"],
   "permissions": [
     "core:default",
     "global-shortcut:allow-is-registered",

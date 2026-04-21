@@ -105,10 +105,16 @@ write into the same `progress` object.
    region below cursor and verifies via token-bag-subset + shortName
    agreement filters.
 
-### Secondary webview
-`scanner-popout` is a separate Tauri webview (`?window=scanner-popout`
-query param). Profile settings sync via `storage` events on
-`tg-myprofile-v3`. See known quirks below.
+### Secondary webviews
+Two independent always-on-top popouts, both created via the scanner-popout
+template in `lib.rs` (async command → `run_on_main_thread` → builder):
+- `scanner-popout` (Alt+P) — hover-scan result display.
+- `task-map-popout` (Alt+M) — 2D task-objective map. Reads `myProfile.tasks`
+  from `tg-myprofile-v3`, persists its own state under `tg-taskmap-mapid-v1`
+  and `tg-taskmap-tasks-v1`. Profile updates (including log-watcher sync)
+  propagate via `storage` events. Chits = colored dots per objective,
+  deterministic color via `taskColor(taskId)` in `src/lib/taskMapUtils.js`.
+See known quirks below.
 
 ### Global hotkeys
 Registered in `lib.rs::run()`:
@@ -116,6 +122,7 @@ Registered in `lib.rs::run()`:
 - **Alt+O** — toggle overlay mode (emits `toggle-overlay` event)
 - **Alt+S** — toggle auto-scan (fan-out to main + popout)
 - **Alt+P** — toggle scanner popout
+- **Alt+M** — toggle task map popout (see `task-map-popout` window)
 
 ### Log watcher (`log_watcher.rs`)
 One-shot parser (Phase A). Tails `build/Logs/<session>/*.log` files
