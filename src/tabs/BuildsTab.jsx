@@ -210,75 +210,13 @@ export default function BuildsTab({ savedBuilds, saveSavedBuilds, myProfile }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedTargets.e, debouncedTargets.r, lockedPaths, selectedWeapon?.id]);
 
-  // Pareto frontier compute. Cached per (weapon, locks). Each point is
-  // computed in its own setTimeout tick so the UI thread is free
-  // between optimizer runs — at worst the user sees brief stutters,
-  // not a sustained freeze. Diagnostic timing is logged so a slow
-  // weapon can be identified.
-  useEffect(() => {
-    if (opMode !== "custom" || !selectedWeapon) return;
-    if (!maxStats.e) return;
-    const cacheKey = `${selectedWeapon.id}|${[...lockedPaths].sort().join(",")}`;
-    if (frontierCache.current.has(cacheKey)) {
-      setFrontier(frontierCache.current.get(cacheKey));
-      return;
-    }
-    setFrontier([]);
-    let cancelled = false;
-    let pendingTimer = null;
-    const N = 3;
-    const accumulated = [];
-    const seen = new Set();
-
-    const runStep = (i) => {
-      if (cancelled || i > N) {
-        if (!cancelled) {
-          accumulated.sort((a, b) => a.e - b.e);
-          frontierCache.current.set(cacheKey, accumulated);
-          setFrontier(accumulated);
-        }
-        return;
-      }
-      const eFloor = Math.round((i / N) * maxStats.e);
-      const t0 = Date.now();
-      try {
-        const result = optimizeBuild(selectedWeapon, "custom", {
-          currentMods: mods,
-          lockedPaths,
-          ergoTarget: eFloor,
-          recoilTarget: 0,
-        });
-        const dt = Date.now() - t0;
-        if (dt > 500) {
-          console.warn(`[frontier] step ${i}/${N} took ${dt}ms on ${selectedWeapon.shortName} (eFloor=${eFloor})`);
-        }
-        const e = Math.round(computeTotalErgo(selectedWeapon, result));
-        const r = pctToRaw(computeTotalRecoil(selectedWeapon, result), selectedWeapon);
-        const k = `${e},${r}`;
-        if (!seen.has(k)) {
-          seen.add(k);
-          accumulated.push({ e, r });
-          // Progressive UI update so the user sees the curve appear.
-          setFrontier([...accumulated].sort((a, b) => a.e - b.e));
-        }
-      } catch (err) {
-        console.warn("[frontier] step error", err);
-      }
-      // Yield between steps so click handlers / paints can run.
-      pendingTimer = setTimeout(() => runStep(i + 1), 16);
-    };
-
-    // Initial delay before any compute, so the user can adjust sliders
-    // for a moment without their input getting drowned out by an
-    // unrelated background sweep.
-    pendingTimer = setTimeout(() => runStep(0), 800);
-
-    return () => {
-      cancelled = true;
-      if (pendingTimer) clearTimeout(pendingTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [opMode, lockedPaths, selectedWeapon?.id, maxStats.e, maxStats.r]);
+  // Frontier compute disabled — chart was driving the freeze on
+  // conflict-heavy weapons. The chart only renders when frontier has
+  // ≥2 points, so leaving frontier empty hides it without further UI
+  // changes. Re-add as an explicit user action (button) once the
+  // optimizer runs are reliably <100ms or moved to a Web Worker.
+  // eslint-disable-next-line no-unused-vars
+  const _frontierCachedForLater = frontierCache;
 
   // Leaderboard: fetch every weapon detail for the selected caliber in
   // parallel, optimize + compute stats, and commit the full row set in a
