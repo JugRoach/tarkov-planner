@@ -817,6 +817,15 @@ function compileWeapon(weapon) {
 // close whichever deficit is larger, returning the closest-feasible
 // build instead of refusing to optimize.
 
+// Hard cap on optimizeCustom wall time. On weapons where UB pruning
+// can't tighten enough to make the search tractable (lots of items
+// per slot × sparse conflicts), the B&B can theoretically run for
+// many minutes. Bailing at 30s and returning the best build found so
+// far is much better UX than freezing — and the seed is already a
+// real complete build, so even an immediate bail returns something
+// valid.
+const CUSTOM_TIME_BUDGET_MS = 30000;
+
 function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   const compiled = compileWeapon(weapon);
   const WORDS = compiled.words;
@@ -825,6 +834,9 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   const rTargetMod = Math.max(0, rTarget);
   const topSlots = weapon?.properties?.slots || [];
   const PENALTY = CUSTOM_INFEASIBILITY_PENALTY;
+  const t0 = Date.now();
+  let dfsCount = 0;
+  let aborted = false;
 
   const rCtx = { ...ctx, mode: "recoil", ubCache: new Map() };
   const eCtx = { ...ctx, mode: "ergo", ubCache: new Map() };
@@ -993,6 +1005,15 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   }
 
   function dfs(curR, curE) {
+    // Cheap counter check; full Date.now() only every 4096 iterations.
+    dfsCount++;
+    if ((dfsCount & 4095) === 0) {
+      if (Date.now() - t0 > CUSTOM_TIME_BUDGET_MS) {
+        aborted = true;
+      }
+    }
+    if (aborted) return;
+
     if (combinedUB(curR, curE) <= best.combined) return;
 
     if (stack.length === 0) {
@@ -1085,6 +1106,13 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   }
 
   dfs(0, 0);
+  const elapsed = Date.now() - t0;
+  // Surface compute stats so we can diagnose slow weapons. Only log
+  // when it's actually noticeable — silence the common fast case.
+  if (elapsed > 250 || aborted) {
+    const tag = aborted ? "ABORTED" : "ok";
+    console.warn(`[optimizeCustom] ${tag} weapon=${weapon?.shortName || weapon?.id || "?"} iters=${dfsCount} elapsed=${elapsed}ms eTarget=${eTarget} rTarget=${rTarget.toFixed(1)} bestCombined=${best.combined.toFixed(1)} feasible=${best.feasible}`);
+  }
   return best.combined === -Infinity ? null : best;
 }
 
