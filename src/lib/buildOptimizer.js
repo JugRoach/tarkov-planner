@@ -817,14 +817,12 @@ function compileWeapon(weapon) {
 // close whichever deficit is larger, returning the closest-feasible
 // build instead of refusing to optimize.
 
-// Hard cap on optimizeCustom wall time. On weapons where UB pruning
-// can't tighten enough to make the search tractable (lots of items
-// per slot × sparse conflicts), the B&B can theoretically run for
-// many minutes. Bailing at 30s and returning the best build found so
-// far is much better UX than freezing — and the seed is already a
-// real complete build, so even an immediate bail returns something
-// valid.
-const CUSTOM_TIME_BUDGET_MS = 30000;
+// Hard cap on optimizeCustom wall time. The fast-infeasibility check
+// + targeted seed handle the common pathological case (Matt's Model 1
+// at near-max recoil), so 10s is plenty for any genuinely-feasible
+// problem. If we hit this budget, the B&B is genuinely exploring an
+// intractable space and returning best-so-far is the right move.
+const CUSTOM_TIME_BUDGET_MS = 10000;
 
 function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   const compiled = compileWeapon(weapon);
@@ -1245,6 +1243,53 @@ export function optimizeBuild(weapon, mode, options = {}) {
       const targeted = optimizeTargeted(weapon, balCtx, maxErgo / 2);
       seedMods = targeted ? targeted.mods : ergoResult.mods;
     }
+
+    // Fast infeasibility check + targeted seed. optimizeTargeted gives
+    // "max recoil build with ergo >= floor". Two important uses:
+    //
+    //   1. If even max-R-with-ergo-floor doesn't reach the recoil
+    //      target, NO build can meet both targets — short-circuit
+    //      and return this build (closest-feasible-on-ergo) without
+    //      wasting 10s on exhaustive infeasibility verification.
+    //
+    //   2. If feasible, this is typically the strongest seed because
+    //      it's the joint-axis maximum on one side. CUSTOM B&B then
+    //      has to find a slightly better (R+E) build, which is much
+    //      easier with this tight bound.
+    if (rTargetModCheck > 0) {
+      const targCtx = { ...baseCtx, ergoPenalty: BAL_ERGO_PENALTY };
+      const targRes = optimizeTargeted(weapon, targCtx, ergoTarget || 0);
+      if (targRes) {
+        if (targRes.totalRecoil < rTargetModCheck) {
+          // Infeasible — return targeted result (best ergo-feasible build).
+          const out = { ...targRes.mods };
+          for (const [path, id] of Object.entries(currentMods)) {
+            const segments = path.split(".");
+            const leaf = segments[segments.length - 1];
+            if (skipSlot(leaf) && !(path in out)) out[path] = id;
+          }
+          return out;
+        }
+        // Feasible — adopt as seed if it scores higher.
+        const tE = targRes.totalErgo - baseErgoCheck;
+        const tR = targRes.totalRecoil;
+        const tCombined = tR + tE - CUSTOM_INFEASIBILITY_PENALTY * (
+          Math.max(0, eTargetModCheck - tE) + Math.max(0, rTargetModCheck - tR)
+        );
+        // Compare to whatever the multi-seed loop picked.
+        if (seedMods) {
+          const sE = computeTotalErgo(weapon, seedMods) - baseErgoCheck;
+          const sR = computeTotalRecoil(weapon, seedMods);
+          const sCombined = sR + sE - CUSTOM_INFEASIBILITY_PENALTY * (
+            Math.max(0, eTargetModCheck - sE) + Math.max(0, rTargetModCheck - sR)
+          );
+          if (tCombined > sCombined) seedMods = targRes.mods;
+        } else {
+          seedMods = targRes.mods;
+        }
+      }
+    }
+
     const result = optimizeCustom(weapon, ctx, ergoTarget || 0, recoilTarget || 0, seedMods);
     resultMods = result ? result.mods : (seedMods || {});
   } else if (mode === "recoil-balanced") {
