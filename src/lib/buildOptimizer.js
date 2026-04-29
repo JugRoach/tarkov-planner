@@ -54,6 +54,12 @@ const EMPTY_SET = Object.freeze(new Set());
 function scoreMod(mp, mode) {
   if (!mp) return 0;
   if (mode === "ergo") return mp.ergonomics || 0;
+  if (mode === "ergoplusrecoil") {
+    // Single-item combined R + E. Used by optimizeCustom for a tighter
+    // score-axis UB than restR + restE (those count max-R and max-E
+    // independently per slot — usually picked from different items).
+    return (mp.ergonomics || 0) + (-(mp.recoilModifier || 0)) * 100;
+  }
   if (mode === "recoil-balanced") {
     const rec = -(mp.recoilModifier || 0) * 100 * BAL_RECOIL_WEIGHT;
     const ergo = mp.ergonomics || 0;
@@ -665,6 +671,10 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
 
   const rCtx = { ...ctx, mode: "recoil", ubCache: new Map() };
   const eCtx = { ...ctx, mode: "ergo", ubCache: new Map() };
+  // cCtx tracks per-slot max(R + E) — the score-axis UB for the
+  // dual-floor B&B. Tighter than restR + restE which counts max-R and
+  // max-E independently per slot (usually different items).
+  const cCtx = { ...ctx, mode: "ergoplusrecoil", ubCache: new Map() };
 
   const stack = [];
   for (const s of topSlots) {
@@ -678,16 +688,17 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
     const fa = isForced(pa, a.slot, ctx);
     const fb = isForced(pb, b.slot, ctx);
     if (fa !== fb) return fa ? 1 : -1;
-    return (ubForSlot(a.slot, pa, rCtx) + ubForSlot(a.slot, pa, eCtx))
-         - (ubForSlot(b.slot, pb, rCtx) + ubForSlot(b.slot, pb, eCtx));
+    return ubForSlot(a.slot, pa, cCtx) - ubForSlot(b.slot, pb, cCtx);
   });
 
   let restR = 0;
   let restE = 0;
+  let restC = 0;
   for (const e of stack) {
     const p = e.pathPrefix ? `${e.pathPrefix}.${e.slot.nameId}` : e.slot.nameId;
     restR += ubForSlot(e.slot, p, rCtx);
     restE += ubForSlot(e.slot, p, eCtx);
+    restC += ubForSlot(e.slot, p, cCtx);
   }
 
   let best = {
@@ -730,7 +741,12 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
   }
 
   function combinedUB(curR, curE) {
-    const score = curR + curE + restR + restE;
+    // Score UB uses restC (sum of per-slot max(R+E)) — tighter than
+    // restR + restE because the latter implies you can pick max-R and
+    // max-E from the same slot, which usually requires picking
+    // different items. Deficits stay on per-axis maxima (restR/restE)
+    // since reaching the floor requires actually maxing that axis.
+    const score = curR + curE + restC;
     const eDefLB = Math.max(0, eTargetMod - (curE + restE));
     const rDefLB = Math.max(0, rTargetMod - (curR + restR));
     return score - PENALTY * (eDefLB + rDefLB);
@@ -764,8 +780,10 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
     const path = top.pathPrefix ? `${top.pathPrefix}.${slot.nameId}` : slot.nameId;
     const slotUR = ubForSlot(slot, path, rCtx);
     const slotUE = ubForSlot(slot, path, eCtx);
+    const slotUC = ubForSlot(slot, path, cCtx);
     restR -= slotUR;
     restE -= slotUE;
+    restC -= slotUC;
 
     if (isForced(path, slot, ctx)) {
       const mod = getForcedMod(slot, path, ctx);
@@ -794,14 +812,14 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
           const fa = isForced(pa, a.slot, ctx);
           const fb = isForced(pb, b.slot, ctx);
           if (fa !== fb) return fa ? 1 : -1;
-          return (ubForSlot(a.slot, pa, rCtx) + ubForSlot(a.slot, pa, eCtx))
-               - (ubForSlot(b.slot, pb, rCtx) + ubForSlot(b.slot, pb, eCtx));
+          return ubForSlot(a.slot, pa, cCtx) - ubForSlot(b.slot, pb, cCtx);
         });
         for (const entry of pushed) {
           const p = `${entry.pathPrefix}.${entry.slot.nameId}`;
           stack.push(entry);
           restR += ubForSlot(entry.slot, p, rCtx);
           restE += ubForSlot(entry.slot, p, eCtx);
+          restC += ubForSlot(entry.slot, p, cCtx);
         }
         dfs(
           curR + itemR,
@@ -816,11 +834,13 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
           const p = `${entry.pathPrefix}.${entry.slot.nameId}`;
           restR -= ubForSlot(entry.slot, p, rCtx);
           restE -= ubForSlot(entry.slot, p, eCtx);
+          restC -= ubForSlot(entry.slot, p, cCtx);
         }
       }
       stack.push(top);
       restR += slotUR;
       restE += slotUE;
+      restC += slotUC;
       return;
     }
 
@@ -863,14 +883,14 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
         const fa = isForced(pa, a.slot, ctx);
         const fb = isForced(pb, b.slot, ctx);
         if (fa !== fb) return fa ? 1 : -1;
-        return (ubForSlot(a.slot, pa, rCtx) + ubForSlot(a.slot, pa, eCtx))
-             - (ubForSlot(b.slot, pb, rCtx) + ubForSlot(b.slot, pb, eCtx));
+        return ubForSlot(a.slot, pa, cCtx) - ubForSlot(b.slot, pb, cCtx);
       });
       for (const entry of pushed) {
         const p = `${entry.pathPrefix}.${entry.slot.nameId}`;
         stack.push(entry);
         restR += ubForSlot(entry.slot, p, rCtx);
         restE += ubForSlot(entry.slot, p, eCtx);
+        restC += ubForSlot(entry.slot, p, cCtx);
       }
       dfs(
         curR + itemR,
@@ -885,12 +905,14 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
         const p = `${entry.pathPrefix}.${entry.slot.nameId}`;
         restR -= ubForSlot(entry.slot, p, rCtx);
         restE -= ubForSlot(entry.slot, p, eCtx);
+        restC -= ubForSlot(entry.slot, p, cCtx);
       }
     }
 
     stack.push(top);
     restR += slotUR;
     restE += slotUE;
+    restC += slotUC;
   }
 
   dfs(0, 0, {}, [], EMPTY_SET, EMPTY_SET);
@@ -984,14 +1006,38 @@ export function optimizeBuild(weapon, mode, options = {}) {
     const ctx = { ...baseCtx };
     // Seed the CUSTOM B&B with a complete build so the score-UB prune
     // fires from turn 1. Without this, low-but-nonzero targets explode
-    // the search on conflict-heavy weapons. Precompute cache hits give
-    // a free seed; with locks/availability we run a fast scalar
-    // recoil-balanced pass for the seed.
+    // the search on conflict-heavy weapons.
+    //
+    // We try all three precomputed scalar results (ergo, recoil,
+    // balanced) and pick whichever has the highest combined score for
+    // *this particular target*. For a recoil-heavy target the OPT
+    // RECOIL build is typically the tightest seed; for ergo-heavy
+    // targets, OPT ERGO; for middle, OPT BAL. Single-seed-only loses
+    // a lot of pruning on skewed targets.
     let seedMods = null;
     if (!isAvailable && lockedPaths.size === 0 && skipSlot === defaultSkipSlot && weapon?.id) {
-      seedMods = PRECOMPUTED_BUILDS[weapon.id]?.modes?.["recoil-balanced"] || null;
+      const seedScoreFor = (cR, cE) => {
+        const eDef = Math.max(0, eTargetModCheck - cE);
+        const rDef = Math.max(0, rTargetModCheck - cR);
+        return cR + cE - CUSTOM_INFEASIBILITY_PENALTY * (eDef + rDef);
+      };
+      let bestSeedScore = -Infinity;
+      for (const seedMode of ["recoil-balanced", "ergo", "recoil"]) {
+        const candidate = PRECOMPUTED_BUILDS[weapon.id]?.modes?.[seedMode];
+        if (!candidate) continue;
+        const cE = computeTotalErgo(weapon, candidate) - baseErgoCheck;
+        const cR = computeTotalRecoil(weapon, candidate);
+        const c = seedScoreFor(cR, cE);
+        if (c > bestSeedScore) {
+          bestSeedScore = c;
+          seedMods = candidate;
+        }
+      }
     }
     if (!seedMods) {
+      // No precomputed cache available (e.g. weapon added since last
+      // bundle, or locks/availability filter prevent cache). Fall back
+      // to a fast scalar recoil-balanced pass for the seed.
       const ergoCtx = { ...baseCtx, mode: "ergo", ubCache: new Map() };
       const ergoResult = optimizeSlots(slots, "", ergoCtx, EMPTY_SET, EMPTY_SET);
       const maxErgo = computeTotalErgo(weapon, ergoResult.mods);
