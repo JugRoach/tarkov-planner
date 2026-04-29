@@ -92,10 +92,109 @@ function isForced(path, slot, ctx) {
 
 // Returns the locked/skipped mod object at `path`, or null if the slot
 // is forced-empty or the locked id no longer matches an allowed item.
+// IMPORTANT: searches the FULL allowedItems list, not the dominance-
+// filtered one — a user-locked mod might be dominated (and absent
+// from the filtered list) but we still need to honor the lock.
 function getForcedMod(slot, path, ctx) {
   const id = ctx.currentMods[path];
   if (!id) return null;
   return slot?.filters?.allowedItems?.find((i) => i.id === id) || null;
+}
+
+// Per-slot dominance filter. Two items in the same slot's allowed-items
+// list are interchangeable from the optimizer's point of view if one is
+// at least as good in R, at least as good in E, and is at least as
+// compatible (subset of forward conflicts AND subset of reverse
+// conflicts). Strictly-dominated items can never be in any optimal
+// build, so we drop them — the picker UI still shows everything, but
+// the B&B branches get cut down.
+//
+// Why both forward AND reverse conflicts? An item is incompatible if
+// (a) something it conflicts with is chosen, OR (b) something that
+// conflicts with it is chosen. (b) requires a reverse-lookup map.
+// Tarkov's conflictingItems are usually symmetric so the two sets
+// coincide, but the API has occasional asymmetries — checking both is
+// the only correctness-preserving rule.
+const dominanceCache = new WeakMap();
+const reverseConflictsCache = new WeakMap();
+
+function getReverseConflicts(weapon) {
+  if (!weapon) return new Map();
+  if (reverseConflictsCache.has(weapon)) return reverseConflictsCache.get(weapon);
+  const reverse = new Map();
+  const walk = (slots) => {
+    if (!slots) return;
+    for (const slot of slots) {
+      for (const item of slot.filters?.allowedItems || []) {
+        for (const c of item.conflictingItems || []) {
+          let set = reverse.get(c.id);
+          if (!set) {
+            set = new Set();
+            reverse.set(c.id, set);
+          }
+          set.add(item.id);
+        }
+        if (item.properties?.slots) walk(item.properties.slots);
+      }
+    }
+  };
+  walk(weapon?.properties?.slots);
+  reverseConflictsCache.set(weapon, reverse);
+  return reverse;
+}
+
+function getFilteredItems(slot, ctx) {
+  // isAvailable changes the effective candidate set per call; skip
+  // dominance caching to avoid baking in a profile-dependent answer.
+  if (ctx?.isAvailable) return slot?.filters?.allowedItems || [];
+  if (dominanceCache.has(slot)) return dominanceCache.get(slot);
+  const items = slot?.filters?.allowedItems || [];
+  if (items.length <= 1) {
+    dominanceCache.set(slot, items);
+    return items;
+  }
+
+  const reverseMap = getReverseConflicts(ctx?.weapon);
+  const scored = items.map((it) => ({
+    item: it,
+    R: -(it.properties?.recoilModifier || 0) * 100,
+    E: it.properties?.ergonomics || 0,
+    forward: new Set((it.conflictingItems || []).map((c) => c.id)),
+    reverse: reverseMap.get(it.id) || new Set(),
+  }));
+
+  const kept = [];
+  for (let i = 0; i < scored.length; i++) {
+    const candidate = scored[i];
+    let dominated = false;
+    for (let j = 0; j < scored.length; j++) {
+      if (i === j) continue;
+      const other = scored[j];
+      if (other.R < candidate.R || other.E < candidate.E) continue;
+      const strict =
+        other.R > candidate.R ||
+        other.E > candidate.E ||
+        other.forward.size < candidate.forward.size ||
+        other.reverse.size < candidate.reverse.size;
+      if (!strict) continue;
+      let subset = true;
+      for (const c of other.forward) {
+        if (!candidate.forward.has(c)) { subset = false; break; }
+      }
+      if (!subset) continue;
+      for (const c of other.reverse) {
+        if (!candidate.reverse.has(c)) { subset = false; break; }
+      }
+      if (subset) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) kept.push(candidate.item);
+  }
+
+  dominanceCache.set(slot, kept);
+  return kept;
 }
 
 // Path-aware admissible UB on score for a slot at `path`. Cached per
@@ -120,7 +219,7 @@ function ubForSlot(slot, path, ctx) {
     return total;
   }
 
-  const items = slot?.filters?.allowedItems || [];
+  const items = getFilteredItems(slot, ctx);
   if (items.length === 0) {
     ctx.ubCache.set(path, 0);
     return 0;
@@ -143,7 +242,7 @@ function ubForSlot(slot, path, ctx) {
 // non-trivial lower bound. Forced slots descend into the locked mod;
 // free slots try natural sibling order.
 function greedySubtree(slot, path, ctx, chosenIds, conflictPool) {
-  const items = slot?.filters?.allowedItems || [];
+  const items = getFilteredItems(slot, ctx);
   if (items.length === 0) return { score: 0, mods: {}, picked: [] };
 
   if (isForced(path, slot, ctx)) {
@@ -359,7 +458,7 @@ function optimizeSlots(slots, pathPrefix, ctx, initialChosen, initialConflicts) 
       dfs(i + 1, curScore, curMods, curPicked, curChosen, curConflicts);
     }
 
-    const items = slot.filters.allowedItems;
+    const items = getFilteredItems(slot, ctx);
     const compatible = [];
     for (const it of items) {
       if (ctx.isAvailable && !ctx.isAvailable(it)) continue;
@@ -586,7 +685,7 @@ function optimizeTargeted(weapon, ctx, targetTotalErgo) {
       dfs(curR, curE, curMods, curPicked, curChosen, curConflicts);
     }
 
-    const items = slot.filters.allowedItems;
+    const items = getFilteredItems(slot, ctx);
     const compatible = [];
     for (const it of items) {
       if (ctx.isAvailable && !ctx.isAvailable(it)) continue;
@@ -848,7 +947,7 @@ function optimizeCustom(weapon, ctx, eTarget, rTarget, seedMods = null) {
       dfs(curR, curE, curMods, curPicked, curChosen, curConflicts);
     }
 
-    const items = slot.filters.allowedItems;
+    const items = getFilteredItems(slot, ctx);
     const compatible = [];
     for (const it of items) {
       if (ctx.isAvailable && !ctx.isAvailable(it)) continue;
@@ -982,6 +1081,9 @@ export function optimizeBuild(weapon, mode, options = {}) {
     isAvailable,
     lockedPaths,
     currentMods,
+    // Passed through to getFilteredItems so dominance can use the
+    // weapon-wide reverse-conflict map.
+    weapon,
   };
 
   let resultMods;
